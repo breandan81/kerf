@@ -24,6 +24,19 @@
   "three/addons/": "./vendor/three/addons/"
 } }
 </script>
+<!-- goatcounter -->
+<script>
+  // Cookie-free visit counter (stats.bposhaughnessy.com). Only on the live site, so local
+  // copies, the desktop app and forks hosted elsewhere don't report anything.
+  if (/(^|\.)bposhaughnessy\.com$/.test(location.hostname)) {
+    window.goatcounter = { path: p => location.host + p };
+    const s = document.createElement('script');
+    s.async = true;
+    s.dataset.goatcounter = 'https://stats.bposhaughnessy.com/count';
+    s.src = 'https://stats.bposhaughnessy.com/count.js';
+    document.head.appendChild(s);
+  }
+</script>
 </head>
 <body>
 <header class="bar">

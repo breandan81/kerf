@@ -124,6 +124,10 @@ The website at https://kerf.bposhaughnessy.com works like a desktop program.
 - Unsaved work survives a closed tab as a draft.
 - Text uses a bundled set of open fonts.
 
+The website counts page views with a self-hosted, cookie-free [GoatCounter](https://www.goatcounter.com).
+No personal data is collected, and the counter only runs on kerf.bposhaughnessy.com: local mode, the desktop
+app and copies hosted anywhere else don't count anything.
+
 ### Desktop app
 
 ```
