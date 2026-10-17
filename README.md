@@ -63,3 +63,11 @@ npm test             # language, geometry, joints, layout, export
 python3 serve.py projects &   node test/smoke.mjs box.kerf /tmp   # headless UI screenshots
 node test/tutorial.mjs /tmp                                       # click through every lesson
 ```
+
+
+## Desktop app (AppImage)
+
+`./build_appimage.sh` → `desktop/release/Kerf-1.0.0-x86_64.AppImage` (Electron; ~108 MB). Native File menu and
+Open/Save dialogs, saves in place, reads images/fonts straight from disk (system fonts via fontconfig), exports
+to `export/` next to the design. Examples + tutorial live in `~/Kerf`. `Kerf.AppImage design.kerf` opens a file.
+Test: `node test/desktop.mjs <scratchdir> [AppImage]` (hidden window, redirected ~/Kerf).

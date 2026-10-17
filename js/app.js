@@ -12,6 +12,8 @@ import { HELP } from './help.js';
 import { LESSONS } from './tutorial.js';
 import { detectStore, seedExamples, FolderStore, canPickFolder, canSaveInPlace, legacyBrowserFiles, meta } from './storage.js';
 
+const desktop = !!window.kerfDesktop; // running inside the Electron app
+
 const $ = id => document.getElementById(id);
 const store = {
   get(k, d) { try { const v = localStorage.getItem('kerf.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -44,9 +46,9 @@ const editor = CodeMirror($('editor'), {
   mode: 'kerf', lineNumbers: true, indentUnit: 2, tabSize: 2, matchBrackets: true,
   autoCloseBrackets: true, styleActiveLine: true,
   extraKeys: {
-    'Ctrl-S': () => save(), 'Cmd-S': () => save(),
-    'Shift-Ctrl-S': () => save({ as: store_.kind === 'workspace' }), 'Shift-Cmd-S': () => save({ as: store_.kind === 'workspace' }),
-    'F5': () => render({ manual: true }), 'Ctrl-Enter': () => render({ manual: true }),
+    'Ctrl-S': () => (desktop ? CodeMirror.Pass : save()), 'Cmd-S': () => (desktop ? CodeMirror.Pass : save()),
+    'Shift-Ctrl-S': () => (desktop ? CodeMirror.Pass : save({ as: store_.kind === 'workspace' })), 'Shift-Cmd-S': () => (desktop ? CodeMirror.Pass : save({ as: store_.kind === 'workspace' })),
+    'F5': () => (desktop ? CodeMirror.Pass : render({ manual: true })), 'Ctrl-Enter': () => render({ manual: true }),
     'Ctrl-/': 'toggleComment', 'Cmd-/': 'toggleComment',
     'Tab': cm => (cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection('  ')),
   },
@@ -76,7 +78,7 @@ async function listFiles(select) {
   const kerf = files.filter(f => f.endsWith('.kerf') || f.endsWith('.scad'));
   const sel = $('file');
   sel.innerHTML = '';
-  for (const f of kerf) sel.add(new Option(f, f));
+  for (const f of kerf) sel.add(new Option(f.startsWith('/') ? f.replace(/^\/home\/[^/]+/, '~') : f, f));
   if (select) sel.value = select;
   return kerf;
 }
@@ -85,17 +87,20 @@ function showWhere() {
   const k = store_.kind;
   $('where').textContent = k === 'folder' ? '📁 ' + store_.label : '';
   $('where').title = k === 'folder' ? 'Files are read from and saved to this folder on your computer' : '';
-  $('openfolder').hidden = k === 'server' || !canPickFolder();
-  $('open').hidden = k !== 'workspace';
-  $('saveas').hidden = k !== 'workspace';
+  $('openfolder').hidden = k === 'server' || k === 'desktop' || !canPickFolder();
+  $('open').hidden = k !== 'workspace' && k !== 'desktop';
+  $('saveas').hidden = k !== 'workspace' && k !== 'desktop';
+  if (k === 'desktop') $('file').title = 'Files in ' + store_.root + ' and ones you opened elsewhere';
 }
+
+const dirOf = p => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
 
 async function openFile(path) {
   if (isDirty() && !confirm(`Discard unsaved changes to ${current}?`)) { $('file').value = current; return; }
   const text = await (await store_.read(path)).text();
   current = path;
   savedText = path === recovered ? '' : text; // recovered drafts start out unsaved
-  res.base = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+  res.base = dirOf(path);
   res.refreshFiles();
   editor.setValue(text);
   editor.clearHistory();
@@ -107,10 +112,32 @@ async function openFile(path) {
   render({ manual: true });
 }
 
-async function save({ as = false } = {}) {
+let saving = false;
+async function save(opts) {
+  if (saving) return;
+  saving = true;
+  try { await saveInner(opts); } finally { saving = false; }
+}
+async function saveInner({ as = false } = {}) {
   if (!current) return;
   const text = editor.getValue();
-  if (store_.kind === 'workspace') {
+  if (store_.kind === 'desktop') {
+    let path = current;
+    if (as) {
+      const p = await window.kerfDesktop.saveDialog(current);
+      if (!p) return;
+      path = store_.toProjectPath(p);
+      store_.remember(path);
+    }
+    const full = await store_.write(path, text);
+    if (path !== current) {
+      current = path;
+      res.base = dirOf(path);
+      await listFiles(current);
+      store.set('file', current);
+    }
+    log('ok', `saved ${full}`);
+  } else if (store_.kind === 'workspace') {
     const name = await saveToDisk(current, text, as);
     if (!name) return; // cancelled
     if (name !== current.split('/').pop()) {
@@ -173,7 +200,14 @@ $('file').addEventListener('change', e => openFile(e.target.value));
 $('save').addEventListener('click', () => save());
 $('saveas').addEventListener('click', () => save({ as: true }));
 $('new').addEventListener('click', async () => {
-  let name = prompt('New file name', 'untitled.kerf');
+  let name;
+  if (desktop) {
+    if (isDirty() && !confirm(`Discard unsaved changes to ${current}?`)) return;
+    const p = await window.kerfDesktop.saveDialog('untitled.kerf');
+    if (!p) return;
+    name = store_.toProjectPath(p);
+    store_.remember(name);
+  } else name = prompt('New file name', 'untitled.kerf');
   if (!name) return;
   if (!/\.(kerf|scad)$/.test(name)) name += '.kerf';
   const files = await listFiles();
@@ -377,6 +411,7 @@ $('fit2d').addEventListener('click', () => { v2.fit(); v2.draw(); });
 $('render').addEventListener('click', () => render({ manual: true }));
 
 // ------------------------------------------------------------------ export
+let lastExport = null;
 $('export').addEventListener('click', async () => {
   if (!sheetsResult || !sheetsResult.sheets.length) return log('warn', 'Nothing to export');
   const stem = (current || 'kerf').replace(/\.(kerf|scad)$/, '');
@@ -386,7 +421,7 @@ $('export').addEventListener('click', async () => {
     const svg = sheetToSVG(s, { kerf });
     const name = `export/${stem.split('/').pop()}-${s.material.name}-${s.index + 1}.svg`.replace(/[^\w./-]+/g, '_');
     if (store_.kind === 'workspace') download(name.split('/').pop(), svg, 'image/svg+xml');
-    else await store_.write((res.base ? res.base + '/' : '') + name, svg);
+    else lastExport = await store_.write((res.base ? res.base + '/' : '') + name, svg) || name;
     written.push(name);
   }
   if (store_.kind === 'workspace') return log('ok', `Downloaded ${written.length} SVG${written.length > 1 ? 's' : ''} (kerf compensation ${kerf ? 'on' : 'off'}): ${written.map(w => w.split('/').pop()).join(', ')}`);
@@ -466,6 +501,11 @@ async function addFiles(fileList, handles = []) {
 }
 
 async function openFromDisk() {
+  if (desktop) {
+    const p = await window.kerfDesktop.openDialog();
+    if (!p) return;
+    return openPath(p);
+  }
   if (canSaveInPlace() && window.showOpenFilePicker) {
     // Chrome/Edge: keep handles so Save writes back to the same file
     let hs;
@@ -478,6 +518,12 @@ async function openFromDisk() {
     return addFiles(await Promise.all(hs.map(h => h.getFile())), hs);
   }
   $('openinput').click();
+}
+async function openPath(p) {
+  const path = store_.toProjectPath(p);
+  store_.remember(path);
+  await listFiles(current);
+  await openFile(path);
 }
 $('open').addEventListener('click', openFromDisk);
 $('openinput').addEventListener('change', e => { if (e.target.files.length) addFiles([...e.target.files]); e.target.value = ''; });
@@ -496,6 +542,7 @@ $('help').addEventListener('click', () => toggleHelp(true));
 $('helpclose').addEventListener('click', () => toggleHelp(false));
 $('helpbox').addEventListener('click', e => { if (e.target === $('helpbox')) toggleHelp(false); });
 window.addEventListener('keydown', e => {
+  if (desktop && (['F1', 'F5'].includes(e.key) || ((e.ctrlKey || e.metaKey) && 'soe'.includes(e.key.toLowerCase())))) return; // menu accelerators
   if (e.key === 'F5') { e.preventDefault(); render({ manual: true }); }
   if (e.key === 'F1') { e.preventDefault(); toggleHelp(); }
   if (e.key === 'Escape') toggleHelp(false);
@@ -615,8 +662,29 @@ $('tutreset').addEventListener('click', () => {
   const want = new URLSearchParams(location.search).get('file') || store.get('file');
   const first = files.includes(want) ? want : (files.includes('box.kerf') ? 'box.kerf' : files[0]);
   // first visit: start with the tutorial open
-  const linked = new URLSearchParams(location.search).has('file'); // a linked file wins over the tutorial
+  const arg = desktop ? await window.kerfDesktop.takeFileToOpen() : null; // Kerf.AppImage file.kerf
+  const linked = arg || new URLSearchParams(location.search).has('file'); // a linked file wins over the tutorial
   if (store.get('tutOpen', true) && !linked && !recovered) setTutorial(true);
+  else if (arg) await openPath(arg);
   else if (first) await openFile(first);
+  if (desktop) {
+    window.kerfDesktop.onMenu(action => {
+      if (action === 'new') $('new').click();
+      else if (action === 'open') openFromDisk();
+      else if (action === 'save') save();
+      else if (action === 'saveas') save({ as: true });
+      else if (action === 'export') $('export').click();
+      else if (action === 'reveal') window.kerfDesktop.reveal(lastExport || (res.base ? res.base + '/' : '') + 'export');
+      else if (action === 'render') render({ manual: true });
+      else if (action.startsWith('view:')) setView(action.slice(5));
+      else if (action === 'tutorial') setTutorial(true);
+      else if (action === 'help') toggleHelp(true);
+    });
+    window.kerfDesktop.onOpenPath(p => {
+      if (isDirty() && !confirm(`Discard unsaved changes to ${current}?`)) return;
+      savedText = editor.getValue();
+      openPath(p);
+    });
+  }
   window.kerf = { editor, render, get result() { return result; }, get sheets() { return sheetsResult; }, get hits() { return hits; }, setView, v3, v2 };
 })();

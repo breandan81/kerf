@@ -125,6 +125,38 @@ export class WorkspaceStore {
   setHandle(path, handle) { const e = this.files.get(path); if (e) e.handle = handle; }
 }
 
+// The Electron app (desktop/): real files through the preload bridge. Paths
+// inside ~/Kerf are relative to it; anything else is absolute.
+export class DesktopStore {
+  constructor(root) {
+    this.kind = 'desktop';
+    this.root = root;
+    this.label = root;
+    this.external = new Set(JSON.parse(localStorage.getItem('kerf.external') || '[]'));
+  }
+  async list() {
+    const inRoot = await window.kerfDesktop.list();
+    for (const p of [...this.external]) if (!(await window.kerfDesktop.exists(p))) this.external.delete(p);
+    return [...inRoot, ...[...this.external].sort()];
+  }
+  // absolute path from a dialog → the path Kerf uses
+  toProjectPath(p) {
+    return p.startsWith(this.root + '/') ? p.slice(this.root.length + 1) : p;
+  }
+  remember(p) {
+    if (!p.startsWith('/')) return;
+    this.external.add(p);
+    localStorage.setItem('kerf.external', JSON.stringify([...this.external].slice(-30)));
+  }
+  async read(p) {
+    try { return new Blob([await window.kerfDesktop.read(p)]); } catch { throw new Error(`"${p}" not found`); }
+  }
+  async write(p, data) {
+    const payload = typeof data === 'string' ? data : new Uint8Array(await data.arrayBuffer());
+    return window.kerfDesktop.write(p, payload);
+  }
+}
+
 export const canSaveInPlace = () => typeof window.showSaveFilePicker === 'function';
 
 // Files left in browser storage by the previous version of the site
@@ -151,6 +183,7 @@ export async function seedExamples(store) {
 // Pick the backend: local server if present, else a remembered folder
 // (if the browser still grants access), else an in-memory workspace.
 export async function detectStore() {
+  if (window.kerfDesktop) return new DesktopStore(await window.kerfDesktop.root());
   // the local server (./run.sh) only ever runs on this machine
   if (['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) try {
     const r = await fetch('/api/ls');

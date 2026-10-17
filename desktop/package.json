@@ -1,0 +1,50 @@
+{
+  "name": "kerf",
+  "productName": "Kerf",
+  "version": "1.0.0",
+  "description": "OpenSCAD-style code CAD for laser cutting",
+  "author": "Breandan O'Shaughnessy",
+  "license": "UNLICENSED",
+  "main": "main.js",
+  "private": true,
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "scripts": {
+    "start": "electron . --no-sandbox",
+    "dist": "electron-builder --linux AppImage"
+  },
+  "build": {
+    "appId": "com.bposhaughnessy.kerf",
+    "productName": "Kerf",
+    "files": [
+      "main.js",
+      "preload.js",
+      "icon.png",
+      "app/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Graphics",
+      "icon": "icon.png",
+      "synopsis": "Code CAD for laser cutting",
+      "desktop": {
+        "StartupWMClass": "Kerf"
+      }
+    },
+    "fileAssociations": [
+      {
+        "ext": "kerf",
+        "name": "Kerf design",
+        "mimeType": "application/x-kerf"
+      }
+    ],
+    "artifactName": "Kerf-${version}-${arch}.AppImage",
+    "afterPack": "./afterPack.js",
+    "asar": false
+  }
+}

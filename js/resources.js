@@ -17,14 +17,15 @@ export class Resources {
   }
 
   resolve(path) {
-    if (path.startsWith('/')) return path.slice(1);
+    const desktop = this.store && this.store.kind === 'desktop';
+    if (path.startsWith('/')) return desktop ? path : path.slice(1);
     const parts = (this.base ? this.base.split('/') : []).concat(path.split('/'));
     const out = [];
     for (const p of parts) {
       if (p === '..') out.pop();
       else if (p && p !== '.') out.push(p);
     }
-    return out.join('/');
+    return (this.base.startsWith('/') ? '/' : '') + out.join('/');
   }
 
   get(map, key, loader) {
@@ -41,6 +42,10 @@ export class Resources {
       return this.get(this.fonts, 'font:' + p, async () => globalThis.opentype.parse(await (await this.store.read(p)).arrayBuffer()));
     }
     return this.get(this.fonts, 'font:' + name, async () => {
+      if (this.store.kind === 'desktop') {
+        const u8 = await window.kerfDesktop.font(name);
+        return globalThis.opentype.parse(u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength));
+      }
       if (this.store.kind === 'server') {
         const r = await fetch('/api/font?name=' + encodeURIComponent(name));
         if (!r.ok) throw new Error(`font "${name}" not found`);
