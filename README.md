@@ -14,6 +14,11 @@ each opens a file under `<project>/tutorial/`. Press **F1** for the language ref
 
 Everything runs in the browser; `serve.py` only serves files, saves your project and finds fonts.
 
+**Website** (https://kerf.bposhaughnessy.com, `./deploy_tau.sh`): works like a desktop app. **Open…** loads a
+`.kerf` (plus its images/SVGs/fonts) from disk; **Save** writes it back in place (Chrome/Edge) or downloads it
+(Firefox: set *Always ask you where to save files* for a save dialog). Exports download. Unsaved edits survive
+a closed tab as a draft. Chrome/Edge can also **Open folder…**. Fonts are the bundled set in `fonts/`.
+
 ```openscad
 material("ply3", thickness = 3, kerf = 0.12, sheet = [400, 300]);
 t = thickness("ply3");

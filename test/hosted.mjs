@@ -33,10 +33,10 @@ await page.evaluate(() => kerf.editor.setValue(kerf.editor.getValue().replace('f
 await wait(1500);
 console.log('stencil console:', JSON.stringify(await page.$eval('#console', e => e.innerText)));
 // save survives reload
-await page.keyboard.down('Control'); await page.keyboard.press('s'); await page.keyboard.up('Control');
+await page.evaluate(() => document.getElementById('save').click());
 await wait(500);
 // upload a file through the hidden input
-const input = await page.$('#uploadinput');
+const input = await page.$('#openinput');
 fs.writeFileSync(out + '/up.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>');
 await input.uploadFile(out + '/up.svg');
 await wait(800);
@@ -47,7 +47,7 @@ console.log('downloads:', fs.readdirSync(dl));
 await page.reload({ waitUntil: 'load' });
 await page.waitForFunction(() => window.kerf && kerf.result);
 await wait(500);
-console.log('after reload has stencil font:', await page.evaluate(() => kerf.editor.getValue().includes('Allerta Stencil')), 'file:', await page.$eval('#file', e => e.value));
+console.log('after reload draft has stencil font:', await page.evaluate(() => kerf.editor.getValue().includes('Allerta Stencil')), 'file:', await page.$eval('#file', e => e.value));
 await page.screenshot({ path: out + '/hosted.png' });
 console.log('errors:', errors);
 await browser.close();

@@ -67,8 +67,15 @@ pts = [for (a = [0 : 30 : 330]) [cos(a), sin(a)] * 10];
 include &lt;common.kerf&gt;   use &lt;lib.kerf&gt;
 echo("w is", w);</pre>
 
+<h3>Files</h3>
+<p>On the website, <b>Open…</b> (Ctrl+O) loads a <code>.kerf</code> file from your computer. Select its images,
+SVGs and fonts in the same dialog, or drag them onto the page. <b>Save</b> (Ctrl+S) writes it back: in Chrome/Edge
+straight to the same file, in Firefox as a download (set Firefox → Settings → Downloads → <i>Always ask you where
+to save files</i> to get a save dialog). Unsaved work is kept as a draft if the tab closes.
+Chrome/Edge can also <b>Open folder…</b> to work in a folder directly.</p>
+
 <h3>Export</h3>
-<p>One SVG per sheet goes into the project's <code>export/</code> folder (mm units).
+<p>One SVG per sheet (mm units): downloaded on the website, or written to the project's <code>export/</code> folder (local app / opened folder).
 Red stroke = cut, blue stroke = score, black fill = engrave, embedded bitmaps = image engrave, each in its own group.
 In xTool Creative Space, import the SVG and give each colour its own power, speed and passes. Holes are written before outlines.
 Untick <b>kerf comp</b> to export the exact drawn geometry (e.g. when measuring your kerf; see tutorial lesson 9).</p>

@@ -30,12 +30,13 @@
   <span class="brand">Kerf</span>
   <select id="file" title="Project files"></select>
   <button id="new" title="New file">New</button>
+  <button id="open" hidden title="Open a .kerf file from your computer — select its images/SVGs/fonts too (Ctrl+O)">Open…</button>
   <button id="save" title="Save (Ctrl+S)">Save</button>
-  <span id="dirty" class="dirty" hidden>●</span>
+  <button id="saveas" hidden title="Save under a new name (Ctrl+Shift+S)">Save as…</button>
+  <span id="dirty" class="dirty" hidden title="Unsaved changes">●</span>
   <span id="where" class="where"></span>
-  <button id="openfolder" hidden title="Work on .kerf files in a folder on your computer">Open folder…</button>
-  <button id="upload" hidden title="Add images, SVGs, fonts or .kerf files to the project">Add files…</button>
-  <input type="file" id="uploadinput" multiple hidden>
+  <button id="openfolder" hidden title="Chrome/Edge: work directly in a folder on your computer">Open folder…</button>
+  <input type="file" id="openinput" multiple hidden accept=".kerf,.scad,.svg,.png,.jpg,.jpeg,.gif,.webp,.bmp,.ttf,.otf">
   <span class="sep"></span>
   <button id="render" class="primary" title="Render (F5)">▶ Render</button>
   <label class="chk" title="Re-render as you type"><input type="checkbox" id="auto" checked> auto</label>

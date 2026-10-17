@@ -10,7 +10,7 @@ import { findInterference, solidsAsPrisms } from './geom/interfere.js';
 import { bounds } from './geom/clip.js';
 import { HELP } from './help.js';
 import { LESSONS } from './tutorial.js';
-import { detectStore, seedExamples, FolderStore, BrowserStore, canPickFolder, meta } from './storage.js';
+import { detectStore, seedExamples, FolderStore, canPickFolder, canSaveInPlace, legacyBrowserFiles, meta } from './storage.js';
 
 const $ = id => document.getElementById(id);
 const store = {
@@ -45,6 +45,7 @@ const editor = CodeMirror($('editor'), {
   autoCloseBrackets: true, styleActiveLine: true,
   extraKeys: {
     'Ctrl-S': () => save(), 'Cmd-S': () => save(),
+    'Shift-Ctrl-S': () => save({ as: store_.kind === 'workspace' }), 'Shift-Cmd-S': () => save({ as: store_.kind === 'workspace' }),
     'F5': () => render({ manual: true }), 'Ctrl-Enter': () => render({ manual: true }),
     'Ctrl-/': 'toggleComment', 'Cmd-/': 'toggleComment',
     'Tab': cm => (cm.somethingSelected() ? cm.indentSelection('add') : cm.replaceSelection('  ')),
@@ -82,19 +83,18 @@ async function listFiles(select) {
 
 function showWhere() {
   const k = store_.kind;
-  $('where').textContent = k === 'server' ? '' : k === 'folder' ? '📁 ' + store_.label : 'saved in this browser';
-  $('where').title = k === 'server' ? '' : k === 'folder'
-    ? 'Files are read from and saved to this folder on your computer'
-    : 'Files are kept in this browser only. Use "Open folder…" (Chrome/Edge) to work on real files.';
+  $('where').textContent = k === 'folder' ? '📁 ' + store_.label : '';
+  $('where').title = k === 'folder' ? 'Files are read from and saved to this folder on your computer' : '';
   $('openfolder').hidden = k === 'server' || !canPickFolder();
-  $('upload').hidden = k === 'server';
+  $('open').hidden = k !== 'workspace';
+  $('saveas').hidden = k !== 'workspace';
 }
 
 async function openFile(path) {
   if (isDirty() && !confirm(`Discard unsaved changes to ${current}?`)) { $('file').value = current; return; }
   const text = await (await store_.read(path)).text();
   current = path;
-  savedText = text;
+  savedText = path === recovered ? '' : text; // recovered drafts start out unsaved
   res.base = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
   res.refreshFiles();
   editor.setValue(text);
@@ -107,20 +107,71 @@ async function openFile(path) {
   render({ manual: true });
 }
 
-async function save() {
+async function save({ as = false } = {}) {
   if (!current) return;
   const text = editor.getValue();
-  await store_.write(current, text);
+  if (store_.kind === 'workspace') {
+    const name = await saveToDisk(current, text, as);
+    if (!name) return; // cancelled
+    if (name !== current.split('/').pop()) {
+      // saved under a new name: that becomes the open file
+      await store_.write(name, text, store_.handleFor(current));
+      if (as && canSaveInPlace()) store_.setHandle(current, null);
+      current = name;
+      res.base = '';
+      await listFiles(current);
+      store.set('file', current);
+    }
+    log('ok', canSaveInPlace() ? `saved ${name}` : `saved ${name} (downloaded — set Firefox to "Always ask where to save files" to pick the folder)`);
+  } else {
+    await store_.write(current, text);
+    log('ok', `saved ${current}`);
+  }
   savedText = text;
+  recovered = null;
+  store.set('draft', null);
   updateDirty();
-  log('ok', `saved ${current}`);
+}
+
+// Write a file to the user's disk: in place via a file handle (Chrome/Edge),
+// otherwise as a download. Returns the file name, or null if cancelled.
+async function saveToDisk(path, text, as) {
+  await store_.write(path, text);
+  let name = path.split('/').pop();
+  if (canSaveInPlace()) {
+    let handle = as ? null : store_.handleFor(path);
+    try {
+      if (!handle) {
+        handle = await window.showSaveFilePicker({
+          suggestedName: name, id: 'kerf',
+          types: [{ description: 'Kerf design', accept: { 'text/plain': ['.kerf', '.scad'] } }],
+        });
+      }
+      const w = await handle.createWritable();
+      await w.write(text);
+      await w.close();
+      store_.setHandle(path, handle);
+      return handle.name;
+    } catch (e) {
+      if (e.name === 'AbortError') return null;
+      throw e;
+    }
+  }
+  if (as) {
+    const n = prompt('Save as', name);
+    if (!n) return null;
+    name = /\.(kerf|scad)$/.test(n) ? n : n + '.kerf';
+  }
+  download(name, text, 'text/plain');
+  return name;
 }
 
 const isDirty = () => current && editor.getValue() !== savedText;
 function updateDirty() { $('dirty').hidden = !isDirty(); document.title = (isDirty() ? '● ' : '') + (current || '') + ' — Kerf'; }
 
 $('file').addEventListener('change', e => openFile(e.target.value));
-$('save').addEventListener('click', save);
+$('save').addEventListener('click', () => save());
+$('saveas').addEventListener('click', () => save({ as: true }));
 $('new').addEventListener('click', async () => {
   let name = prompt('New file name', 'untitled.kerf');
   if (!name) return;
@@ -138,8 +189,11 @@ window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault
 
 // ------------------------------------------------------------------ render
 let timer = null;
+let recovered = null; // path of a draft restored after a crash/reload
 editor.on('change', () => {
   updateDirty();
+  // keep a draft of unsaved work in case the tab is closed or crashes
+  if (store_ && store_.kind === 'workspace') store.set('draft', isDirty() ? { path: current, text: editor.getValue() } : null);
   if ($('auto').checked) { clearTimeout(timer); timer = setTimeout(() => render(), 450); }
 });
 
@@ -331,11 +385,11 @@ $('export').addEventListener('click', async () => {
   for (const s of sheetsResult.sheets) {
     const svg = sheetToSVG(s, { kerf });
     const name = `export/${stem.split('/').pop()}-${s.material.name}-${s.index + 1}.svg`.replace(/[^\w./-]+/g, '_');
-    if (store_.kind === 'browser') download(name.split('/').pop(), svg);
+    if (store_.kind === 'workspace') download(name.split('/').pop(), svg, 'image/svg+xml');
     else await store_.write((res.base ? res.base + '/' : '') + name, svg);
     written.push(name);
   }
-  if (store_.kind === 'browser') return log('ok', `Downloaded ${written.length} SVG${written.length > 1 ? 's' : ''} (kerf compensation ${kerf ? 'on' : 'off'}): ${written.map(w => w.split('/').pop()).join(', ')}`);
+  if (store_.kind === 'workspace') return log('ok', `Downloaded ${written.length} SVG${written.length > 1 ? 's' : ''} (kerf compensation ${kerf ? 'on' : 'off'}): ${written.map(w => w.split('/').pop()).join(', ')}`);
   log('ok', `Exported ${written.length} sheet${written.length > 1 ? 's' : ''} (kerf compensation ${kerf ? 'on' : 'off'}):\n  ` + written.join('\n  '));
 });
 $('kerfcomp').checked = store.get('kerfcomp', true);
@@ -343,9 +397,9 @@ $('kerfcomp').addEventListener('change', e => store.set('kerfcomp', e.target.che
 $('auto').checked = store.get('auto', true);
 $('auto').addEventListener('change', e => store.set('auto', e.target.checked));
 
-function download(name, text) {
+function download(name, text, type) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'image/svg+xml' }));
+  a.href = URL.createObjectURL(new Blob([text], { type }));
   a.download = name;
   document.body.appendChild(a);
   a.click();
@@ -388,20 +442,45 @@ $('openfolder').addEventListener('click', async () => {
   log('ok', `Working in folder "${handle.name}"`);
 });
 
-async function addFiles(fileList) {
-  const dir = res.base ? res.base + '/' : '';
+// Bring files from disk into the project. In the workspace (website) the
+// first .kerf among them is opened; images/SVGs/fonts are kept alongside it.
+async function addFiles(fileList, handles = []) {
+  const kerfs = [];
   const names = [];
-  for (const f of fileList) {
-    await store_.write(dir + f.name, f);
-    names.push(dir + f.name);
+  for (let i = 0; i < fileList.length; i++) {
+    const f = fileList[i];
+    const path = store_.kind === 'workspace' ? f.name : (res.base ? res.base + '/' : '') + f.name;
+    if (/\.(kerf|scad)$/i.test(f.name)) kerfs.push(path);
+    await store_.write(path, f, handles[i]);
+    names.push(path);
   }
   res.refreshFiles();
   await listFiles(current);
-  log('ok', `Added ${names.join(', ')}. Use them with e.g. image("${names[0].slice(dir.length)}") or import(...).`);
-  render({ manual: true });
+  const assets = names.filter(n => !kerfs.includes(n));
+  if (assets.length) log('ok', `Loaded ${assets.join(', ')}`);
+  if (kerfs.length) {
+    if (isDirty() && !confirm(`Discard unsaved changes to ${current}?`)) return;
+    savedText = editor.getValue();
+    await openFile(kerfs[0]);
+  } else render({ manual: true });
 }
-$('upload').addEventListener('click', () => $('uploadinput').click());
-$('uploadinput').addEventListener('change', e => { if (e.target.files.length) addFiles([...e.target.files]); e.target.value = ''; });
+
+async function openFromDisk() {
+  if (canSaveInPlace() && window.showOpenFilePicker) {
+    // Chrome/Edge: keep handles so Save writes back to the same file
+    let hs;
+    try {
+      hs = await window.showOpenFilePicker({
+        multiple: true, id: 'kerf',
+        types: [{ description: 'Kerf designs and assets', accept: { 'text/plain': ['.kerf', '.scad'], 'image/*': ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'], 'font/*': ['.ttf', '.otf'] } }],
+      });
+    } catch { return; }
+    return addFiles(await Promise.all(hs.map(h => h.getFile())), hs);
+  }
+  $('openinput').click();
+}
+$('open').addEventListener('click', openFromDisk);
+$('openinput').addEventListener('change', e => { if (e.target.files.length) addFiles([...e.target.files]); e.target.value = ''; });
 // drop files anywhere on the page
 window.addEventListener('dragover', e => { if (store_ && store_.kind !== 'server') e.preventDefault(); });
 window.addEventListener('drop', e => {
@@ -420,7 +499,8 @@ window.addEventListener('keydown', e => {
   if (e.key === 'F5') { e.preventDefault(); render({ manual: true }); }
   if (e.key === 'F1') { e.preventDefault(); toggleHelp(); }
   if (e.key === 'Escape') toggleHelp(false);
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save({ as: e.shiftKey && store_.kind === 'workspace' }); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'o' && store_ && store_.kind === 'workspace') { e.preventDefault(); openFromDisk(); }
 });
 {
   const sp = $('splitter'), left = $('left');
@@ -515,7 +595,20 @@ $('tutreset').addEventListener('click', () => {
   stdlib = await (await fetch('lib/stdlib.kerf')).text();
   store_ = await detectStore();
   res.store = store_;
-  if (store_.kind === 'browser') await seedExamples(store_);
+  if (store_.kind === 'workspace') {
+    await seedExamples(store_);
+    // files made with the earlier browser-storage version: keep them reachable
+    const legacy = await legacyBrowserFiles();
+    for (const [k, blob] of legacy) await store_.write(k, blob);
+    if (legacy.length) log('warn', `Found ${legacy.length} file(s) saved in this browser by an earlier version: ${legacy.map(l => l[0]).join(', ')}. Open them from the file list and use Save to put them on your computer.`);
+    const draft = store.get('draft');
+    if (draft && draft.path && typeof draft.text === 'string') {
+      await store_.write(draft.path, draft.text);
+      recovered = draft.path;
+      store.set('file', draft.path);
+      log('warn', `Recovered unsaved changes to ${draft.path} — Save to keep them.`);
+    }
+  }
   showWhere();
   const files = await listFiles();
   setView(view);
@@ -523,7 +616,7 @@ $('tutreset').addEventListener('click', () => {
   const first = files.includes(want) ? want : (files.includes('box.kerf') ? 'box.kerf' : files[0]);
   // first visit: start with the tutorial open
   const linked = new URLSearchParams(location.search).has('file'); // a linked file wins over the tutorial
-  if (store.get('tutOpen', true) && !linked) setTutorial(true);
+  if (store.get('tutOpen', true) && !linked && !recovered) setTutorial(true);
   else if (first) await openFile(first);
   window.kerf = { editor, render, get result() { return result; }, get sheets() { return sheetsResult; }, get hits() { return hits; }, setView, v3, v2 };
 })();
