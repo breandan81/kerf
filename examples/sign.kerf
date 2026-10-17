@@ -1,0 +1,48 @@
+// Acrylic sign standing in a plywood base, plus a living-hinge sample.
+// Shows: two materials, SVG import, bitmap engraving, scoring, slots
+// with clearance, and a reference object for test-fitting.
+
+material("ply6", thickness = 6, color = "wood", kerf = 0.15, sheet = [300, 200]);
+material("acrylic3", thickness = 3, color = [0.75, 0.9, 1], opacity = 0.55, kerf = 0.1, sheet = [300, 200]);
+
+ta = thickness("acrylic3");
+tb = thickness("ply6");
+clearance = 0.2;          // slot is this much wider than the acrylic
+
+PW = 100;  PH = 120;      // sign panel
+BW = 140;  BD = 50;       // base
+
+part("base", "ply6") {
+  difference() {
+    rounded_square([BW, BD], r = 8);
+    translate([(BW - PW) / 2, BD / 2 - (ta + clearance) / 2]) square([PW, ta + clearance]);
+  }
+  score() translate([4, 4]) rounded_square([BW - 8, BD - 8], r = 5);
+}
+
+translate([(BW - PW) / 2, BD / 2 - ta / 2, 0]) face_y(ta)
+  part("sign", "acrylic3") {
+    hull() {
+      square([PW, 10]);
+      for (x = [12, PW - 12]) translate([x, PH - 12]) circle(12);
+    }
+    engrave() {
+      translate([PW / 2, PH - 42]) image("assets/sunburst.png", width = 50, center = true);
+      translate([PW / 2 - 20, 22]) resize([16, 0], auto = true) import("assets/star.svg", center = true);
+      translate([PW / 2 + 6, 22]) text("KERF", size = 8, font = "Liberation Sans:style=Bold", valign = "center");
+    }
+  }
+
+// flat sample of a living hinge, lying next to the stand
+translate([BW + 20, 0, 0]) part("hinge sample", "ply6") {
+  difference() {
+    rounded_square([90, 50], r = 3);
+    translate([10, 25]) circle(d = 5);
+    translate([80, 25]) circle(d = 5);
+  }
+  translate([25, 0]) living_hinge(40, 50, pitch = 1.6, seg = 14, bridge = 3);
+}
+
+// test-fit: a 14 mm marker standing on the base in front of the sign.
+// Try moving it to y = 20 — the fit check reports the collision.
+%translate([BW / 2 + 40, 12, tb]) cylinder(h = 130, d = 14);

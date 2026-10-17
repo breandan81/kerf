@@ -1,0 +1,57 @@
+// Open-top finger-jointed box with an engraved lid label.
+// Front/back own the vertical corners, the bottom owns the bottom corners.
+
+material("ply3", thickness = 3, color = "wood", kerf = 0.12, sheet = [400, 300]);
+t = thickness("ply3");
+
+W = 120;   // outside width  (x)
+D = 80;    // outside depth  (y)
+H = 60;    // outside height (z)
+fw = 12;   // target finger width
+
+nW = finger_count(W - 2 * t, fw);
+nD = finger_count(D - 2 * t, fw);
+nH = finger_count(H - t, fw);
+
+// front/back: W × H, tabs down into the bottom (odd), tabs into the sides (even)
+module front_panel(label = "") {
+  union() {
+    translate([t, t]) square([W - 2 * t, H - t]);
+    translate([t, 0]) finger_tabs(W - 2 * t, t, nW, odd = true);
+    for (x = [t, W]) translate([x, t]) rotate(90) finger_tabs(H - t, t, nH, odd = false);
+  }
+  if (label != "")
+    engrave() translate([W / 2, H / 2]) text(label, size = 12, halign = "center", valign = "center");
+}
+
+// sides: D × H, tabs down (odd), tabs into front/back (odd)
+module side_panel() {
+  difference() {
+    union() {
+      translate([t, t]) square([D - 2 * t, H - t]);
+      translate([t, 0]) finger_tabs(D - 2 * t, t, nD, odd = true);
+      for (x = [t, D]) translate([x, t]) rotate(90) finger_tabs(H - t, t, nH, odd = true);
+    }
+    // finger grip
+    translate([D / 2, H]) slot(30, 14);
+  }
+}
+
+// bottom: W × D, owns the corners, tabs where the walls have gaps
+module bottom_panel() {
+  union() {
+    translate([t, t]) square([W - 2 * t, D - 2 * t]);
+    for (y = [0, D - t]) translate([t, y]) finger_tabs(W - 2 * t, t, nW, odd = false);
+    for (x = [t, W]) translate([x, t]) rotate(90) finger_tabs(D - 2 * t, t, nD, odd = false);
+    for (x = [0, W - t], y = [0, D - t]) translate([x, y]) square(t);
+  }
+}
+
+part("bottom", "ply3") bottom_panel();
+face_y(t) part("front", "ply3") front_panel("TOOLS");
+translate([0, D - t, 0]) face_y(t) part("back", "ply3") front_panel();
+face_x(t) part("left", "ply3") side_panel();
+translate([W - t, 0, 0]) face_x(t) part("right", "ply3") side_panel();
+
+// test-fit a reference object (not cut): a 100 × 60 × 40 block inside
+%translate([10, 10, t]) cube([100, 60, 40]);

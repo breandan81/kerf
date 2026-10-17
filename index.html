@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kerf</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='2' width='12' height='12' fill='none' stroke='%23e8322b' stroke-width='2'/></svg>">
+<link rel="stylesheet" href="vendor/codemirror/lib/codemirror.css">
+<link rel="stylesheet" href="vendor/codemirror/addon/dialog/dialog.css">
+<link rel="stylesheet" href="css/app.css">
+<script src="vendor/clipper.js"></script>
+<script src="vendor/opentype.min.js"></script>
+<script src="vendor/codemirror/lib/codemirror.js"></script>
+<script src="vendor/codemirror/addon/mode/simple.js"></script>
+<script src="vendor/codemirror/addon/edit/matchbrackets.js"></script>
+<script src="vendor/codemirror/addon/edit/closebrackets.js"></script>
+<script src="vendor/codemirror/addon/comment/comment.js"></script>
+<script src="vendor/codemirror/addon/dialog/dialog.js"></script>
+<script src="vendor/codemirror/addon/search/searchcursor.js"></script>
+<script src="vendor/codemirror/addon/search/search.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/addons/"
+} }
+</script>
+</head>
+<body>
+<header class="bar">
+  <span class="brand">Kerf</span>
+  <select id="file" title="Project files"></select>
+  <button id="new" title="New file">New</button>
+  <button id="save" title="Save (Ctrl+S)">Save</button>
+  <span id="dirty" class="dirty" hidden>●</span>
+  <span class="sep"></span>
+  <button id="render" class="primary" title="Render (F5)">▶ Render</button>
+  <label class="chk" title="Re-render as you type"><input type="checkbox" id="auto" checked> auto</label>
+  <span class="sep"></span>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-view="3d" class="on">3D fit</button>
+    <button role="tab" data-view="part">Parts</button>
+    <button role="tab" data-view="sheets">Sheets</button>
+  </div>
+  <span class="grow"></span>
+  <button id="export" title="Write one SVG per sheet into the project's export/ folder">Export SVG</button>
+  <label class="chk" title="Grow outlines / shrink holes by half the material's kerf"><input type="checkbox" id="kerfcomp" checked> kerf comp</label>
+  <button id="help" title="Language reference (F1)">?</button>
+</header>
+
+<main>
+  <section class="left" id="left">
+    <div id="editor"></div>
+    <div class="console-head"><span>Console</span><span id="stats" class="muted"></span></div>
+    <div id="console"></div>
+  </section>
+  <div class="splitter" id="splitter"></div>
+  <section class="right">
+    <div class="viewbar">
+      <span id="viewtools-3d" class="viewtools">
+        <label>explode <input type="range" id="explode" min="0" max="1.5" step="0.01" value="0"></label>
+        <button id="fit3d" title="Fit view">fit</button>
+        <span id="fitstatus" class="fitstatus"></span>
+      </span>
+      <span id="viewtools-2d" class="viewtools" hidden>
+        <button id="fit2d" title="Fit view (or double-click)">fit</button>
+        <span class="legend"><i class="lg cut"></i>cut <i class="lg score"></i>score <i class="lg engrave"></i>engrave</span>
+      </span>
+    </div>
+    <div class="views">
+      <div id="v3d" class="view"></div>
+      <canvas id="v2d" class="view" hidden></canvas>
+    </div>
+    <div id="partlist" class="partlist"></div>
+  </section>
+</main>
+
+<div id="helpbox" class="helpbox" hidden>
+  <div class="helpinner">
+    <button id="helpclose" class="close" aria-label="Close">×</button>
+    <div id="helpcontent"></div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
