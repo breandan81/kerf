@@ -185,6 +185,7 @@ export class View3D {
   }
 
   fit() {
+    this.group.updateMatrixWorld(true); // new parts haven't been rendered yet
     const box = new THREE.Box3().setFromObject(this.group);
     if (box.isEmpty()) return;
     if (!this.container.clientWidth) { this.pendingFit = true; return; }
@@ -193,7 +194,11 @@ export class View3D {
     const size = box.getSize(new THREE.Vector3()).length();
     const dir = new THREE.Vector3(0.55, -0.75, 0.55).normalize();
     this.controls.target.copy(c);
-    this.camera.position.copy(c).addScaledVector(dir, size * 1.4);
+    // fit the bounding sphere into the narrower of the two fields of view
+    const vfov = this.camera.fov * Math.PI / 180;
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * this.camera.aspect);
+    const dist = (size / 2) / Math.sin(Math.min(vfov, hfov) / 2) * 1.05;
+    this.camera.position.copy(c).addScaledVector(dir, dist);
     this.camera.near = size / 100;
     this.camera.far = size * 50;
     this.camera.updateProjectionMatrix();

@@ -1,0 +1,16 @@
+// Lesson 10 — going further: living hinges, T-slots, your own library
+
+material("ply3", thickness = 3, color = "wood", sheet = [300, 200]);
+
+// Bends around an axis parallel to y, across the 50 mm hinge zone.
+part("hinge", "ply3") {
+  rounded_square([120, 60], r = 4);
+  translate([35, 0]) living_hinge(50, 60, pitch = 1.6, seg = 16, bridge = 3);
+}
+
+// A captive-nut T-slot for an M3 bolt, cut into the bottom edge.
+translate([0, 70, 0]) part("bracket", "ply3")
+  difference() {
+    square([60, 30]);
+    translate([30, 0]) tslot(d = 3, len = 12, nut_w = 5.5, nut_t = 2.4);
+  }

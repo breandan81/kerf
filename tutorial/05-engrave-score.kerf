@@ -1,0 +1,22 @@
+// Lesson 5 — engraving, scoring, text and images
+
+material("ply3", thickness = 3, color = "wood", sheet = [300, 200]);
+
+part("tag", "ply3") {
+  difference() {
+    rounded_square([100, 50], r = 6);
+    translate([10, 25]) circle(d = 6);                   // cut: a hole for a key ring
+  }
+  engrave()                                              // engrave: filled areas
+    translate([58, 25]) text("HELLO", size = 12, font = "Liberation Sans:style=Bold",
+                             halign = "center", valign = "center");
+  score() translate([20, 5]) rounded_square([75, 40], r = 4);   // score: just a line
+}
+
+translate([120, 0, 0]) part("art", "ply3") {
+  rounded_square([80, 80], r = 4);
+  engrave() {
+    translate([40, 46]) image("assets/sunburst.png", width = 50, center = true);  // photo engrave
+    translate([40, 12]) resize([14, 0], auto = true) import("assets/star.svg", center = true);
+  }
+}

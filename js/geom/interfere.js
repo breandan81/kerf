@@ -3,7 +3,8 @@
 // sample points inside part A and test them against part B; touching faces
 // don't count because samples sit at cell centres and B is shrunk by eps.
 import { apply4 } from './mat4.js';
-import { bounds } from './clip.js';
+import { bounds, offset, intersection, clipLines, area, union } from './clip.js';
+import { mul4 } from './mat4.js';
 
 function invert4(m) {
   // rigid/affine inverse via general 4x4 inversion
@@ -100,8 +101,9 @@ export function findInterference(parts, { eps = 0.02, maxStep = 0.5, refs = [] }
     for (let j = i + 1; j < parts.length; j++) {
       const A = boxes[i], B = boxes[j];
       if (A.x1 <= B.x0 + eps || B.x1 <= A.x0 + eps || A.y1 <= B.y0 + eps || B.y1 <= A.y0 + eps || A.z1 <= B.z0 + eps || B.z1 <= A.z0 + eps) continue;
-      const r = pairOverlap(parts[i], parts[j], inv[j], B, eps, maxStep);
-      if (r.volume > 0) hits.push({ a: parts[i], b: parts[j], ...r });
+      // exact clipping needs no safety margin: touching faces have zero area
+      const r = exactOverlap(parts[i], parts[j], inv[j], 0) || pairOverlap(parts[i], parts[j], inv[j], B, eps, maxStep);
+      if (r.volume > 0.05) hits.push({ a: parts[i], b: parts[j], ...r });
     }
   }
   return hits;
@@ -133,4 +135,72 @@ function pairOverlap(pa, pb, invB, boxB, eps, maxStep) {
     }
   }
   return { volume: count * step * step * ta / nz, points: pts };
+}
+
+// Exact overlap for the usual laser case: sheets parallel or perpendicular.
+// Returns null for oblique pairs (the sampler handles those).
+function exactOverlap(pa, pb, invB, eps) {
+  const M = mul4(invB, pa.m4); // A-local → B-local
+  const ta = pa.material.thickness, tb = pb.material.thickness;
+  const nz = M[10]; // A's normal · B's normal
+  const polyA = eps ? offset(pa.shape.body, -eps, 'miter') : pa.shape.body;
+  const polyB = eps ? offset(pb.shape.body, -eps, 'miter') : pb.shape.body;
+  if (!polyA.length || !polyB.length) return { volume: 0, points: [] };
+  const pts = [];
+  const toWorld = (x, y, z) => {
+    const m = pa.m4;
+    return [m[0] * x + m[1] * y + m[2] * z + m[3], m[4] * x + m[5] * y + m[6] * z + m[7], m[8] * x + m[9] * y + m[10] * z + m[11]];
+  };
+  if (Math.abs(Math.abs(nz) - 1) < 1e-6) {
+    // parallel sheets: map A's outline into B's plane, intersect, times z overlap
+    const w0 = M[11], w1 = M[11] + M[10] * ta;
+    const dz = Math.min(Math.max(w0, w1), tb - eps) - Math.max(Math.min(w0, w1), eps);
+    if (dz <= 0) return { volume: 0, points: [] };
+    const mapped = polyA.map(p => p.map(([x, y]) => [M[0] * x + M[1] * y + M[3], M[4] * x + M[5] * y + M[7]]));
+    const inter = intersection(mapped, polyB);
+    const a = Math.abs(inter.reduce((s, p) => s + area(p), 0));
+    // points back in world space via B's frame
+    const mb = pb.m4, wz = (Math.max(Math.min(w0, w1), 0) + Math.min(Math.max(w0, w1), tb)) / 2;
+    for (const p of inter) for (const [u, v] of p) pts.push([mb[0] * u + mb[1] * v + mb[2] * wz + mb[3], mb[4] * u + mb[5] * v + mb[6] * wz + mb[7], mb[8] * u + mb[9] * v + mb[10] * wz + mb[11]]);
+    return { volume: a * dz, points: pts };
+  }
+  if (Math.abs(nz) > 1e-6) return null;
+  // perpendicular: in A's plane at height c, B is a set of strips
+  const gx = M[8], gy = M[9];          // gradient of B's w across A's plane
+  const g2 = gx * gx + gy * gy;
+  if (g2 < 1e-12) return null;
+  const ex = -gy / Math.sqrt(g2), ey = gx / Math.sqrt(g2); // along the strips
+  const nx = gx / g2, ny = gy / g2;                       // per unit of w
+  const ba = bounds(polyA);
+  const corners = [[ba.x0, ba.y0], [ba.x1, ba.y0], [ba.x0, ba.y1], [ba.x1, ba.y1]];
+  const sProj = corners.map(([x, y]) => x * ex + y * ey);
+  const sMin = Math.min(...sProj) - 1, sMax = Math.max(...sProj) + 1;
+  const levels = 8;
+  let volume = 0;
+  for (let k = 0; k < levels; k++) {
+    const c = (k + 0.5) * ta / levels;
+    // A-plane point with w = 0 and s = 0
+    const w0 = M[10] * c + M[11];
+    const px = -w0 * nx, py = -w0 * ny;
+    const uv = (x, y) => [M[0] * x + M[1] * y + M[2] * c + M[3], M[4] * x + M[5] * y + M[6] * c + M[7]];
+    const P0 = uv(px, py);
+    const P1 = uv(px + ex, py + ey);
+    const D = [P1[0] - P0[0], P1[1] - P0[1]];
+    const D2 = D[0] * D[0] + D[1] * D[1];
+    const segs = clipLines([[[P0[0] + sMin * D[0], P0[1] + sMin * D[1]], [P0[0] + sMax * D[0], P0[1] + sMax * D[1]]]], polyB, true);
+    const rects = [];
+    for (const seg of segs) {
+      const ss = seg.map(([u, v]) => ((u - P0[0]) * D[0] + (v - P0[1]) * D[1]) / D2);
+      const s0 = Math.min(...ss), s1 = Math.max(...ss);
+      if (s1 - s0 <= 0) continue;
+      const at = (s, w) => [px + s * ex + w * nx, py + s * ey + w * ny];
+      rects.push([at(s0, eps), at(s1, eps), at(s1, tb - eps), at(s0, tb - eps)]);
+    }
+    if (!rects.length) continue;
+    const inter = intersection(polyA, union(rects));
+    const a = Math.abs(inter.reduce((s, p) => s + area(p), 0));
+    volume += a * ta / levels;
+    if (a > 0) for (const p of inter) for (const [x, y] of p) pts.push(toWorld(x, y, c));
+  }
+  return { volume, points: pts.slice(0, 2000) };
 }

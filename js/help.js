@@ -70,5 +70,6 @@ echo("w is", w);</pre>
 <h3>Export</h3>
 <p>One SVG per sheet goes into the project's <code>export/</code> folder (mm units).
 Red stroke = cut, blue stroke = score, black fill = engrave, embedded bitmaps = image engrave, each in its own group.
-In xTool Creative Space, import the SVG and set processing per group/colour. Holes are written before outlines.</p>
+In xTool Creative Space, import the SVG and give each colour its own power, speed and passes. Holes are written before outlines.
+Untick <b>kerf comp</b> to export the exact drawn geometry (e.g. when measuring your kerf; see tutorial lesson 9).</p>
 `;

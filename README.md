@@ -9,7 +9,10 @@ and export sheets as SVG for the laser (tuned for xTool Creative Space).
 ./run.sh ~/some/folder   # any folder of .kerf files + images/SVGs
 ```
 
-Opens http://127.0.0.1:8790/. Press **F1** in the app for the language reference.
+Opens http://127.0.0.1:8790/. The **Tutorial** panel (open on first visit) walks through ten lessons;
+each opens a file under `<project>/tutorial/`. Press **F1** for the language reference.
+
+Everything runs in the browser; `serve.py` only serves files, saves your project and finds fonts.
 
 ```openscad
 material("ply3", thickness = 3, kerf = 0.12, sheet = [400, 300]);
@@ -53,4 +56,5 @@ translate([0, 0, 60]) part("lid2", "ply3") square([120, 80]);   // place in 3D
 npm install          # dev deps for tests only (clipper-lib, opentype.js, puppeteer-core)
 npm test             # language, geometry, joints, layout, export
 python3 serve.py projects &   node test/smoke.mjs box.kerf /tmp   # headless UI screenshots
+node test/tutorial.mjs /tmp                                       # click through every lesson
 ```

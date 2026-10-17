@@ -1,0 +1,8 @@
+// Lesson 2 — booleans: cutting holes
+// difference() keeps the FIRST child and subtracts all the others.
+
+difference() {
+  square([80, 50]);
+  translate([40, 25]) circle(d = 20);   // a big centre hole
+  translate([10, 10]) circle(d = 4);    // one screw hole
+}

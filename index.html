@@ -44,6 +44,7 @@
   <span class="grow"></span>
   <button id="export" title="Write one SVG per sheet into the project's export/ folder">Export SVG</button>
   <label class="chk" title="Grow outlines / shrink holes by half the material's kerf"><input type="checkbox" id="kerfcomp" checked> kerf comp</label>
+  <button id="tutbtn" title="Step-by-step tutorial">Tutorial</button>
   <button id="help" title="Language reference (F1)">?</button>
 </header>
 
@@ -72,6 +73,18 @@
     </div>
     <div id="partlist" class="partlist"></div>
   </section>
+  <aside id="tutorial" class="tut" hidden>
+    <div class="tut-head">
+      <select id="tutsel" aria-label="Lesson"></select>
+      <button id="tutclose" class="x" aria-label="Close tutorial">×</button>
+    </div>
+    <div id="tutbody" class="tut-body"></div>
+    <div class="tut-foot">
+      <button id="tutprev">← Back</button>
+      <button id="tutreset" title="Restore this lesson's original code">Reset code</button>
+      <button id="tutnext" class="primary">Next →</button>
+    </div>
+  </aside>
 </main>
 
 <div id="helpbox" class="helpbox" hidden>

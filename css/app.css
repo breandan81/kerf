@@ -125,7 +125,30 @@ main { flex: 1; display: flex; min-height: 0; }
 .helpinner td { padding: 3px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .helpinner td:first-child { white-space: nowrap; font-family: ui-monospace, monospace; font-size: 12.5px; }
 .close { position: absolute; right: 12px; top: 10px; }
+
+.tut { width: 360px; flex: none; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--line); min-height: 0; }
+.tut[hidden] { display: none; }
+.tut-head { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.tut-head select { flex: 1; min-width: 0; }
+.tut-body { flex: 1; overflow: auto; padding: 6px 16px 14px; font-size: 13.5px; line-height: 1.55; }
+.tut-body h2 { font-size: 17px; margin: 10px 0 6px; }
+.tut-body .step { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 10px; }
+.tut-body code { font: 12.5px ui-monospace, monospace; background: var(--panel2); padding: 0 4px; border-radius: 4px; }
+.tut-body kbd { font: 11.5px ui-monospace, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+.tut-body ul, .tut-body ol { padding-left: 20px; }
+.tut-body li { margin: 3px 0; }
+.tut-tasks { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-top: 14px; }
+.tut-tasks h3 { margin: 0 0 4px; font-size: 13px; color: var(--accent2); }
+.tut-tasks label { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; cursor: pointer; }
+.tut-tasks input { margin-top: 4px; }
+.tut-tasks label.done span { color: var(--muted); text-decoration: line-through; }
+.tut-foot { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); }
+.tut-foot #tutreset { margin-right: auto; }
+.c-cut { color: #e8322b; font-weight: 600; } .c-score { color: #2f6bff; font-weight: 600; }
+.c-eng { font-weight: 700; } .c-ok { color: var(--ok); }
+.x { padding: 0 9px; }
 @media (max-width: 760px) {
+  .tut { width: 100%; height: 50%; border-left: 0; border-top: 1px solid var(--line); }
   main { flex-direction: column; }
   .left { width: 100% !important; height: 45%; }
   .splitter { display: none; }

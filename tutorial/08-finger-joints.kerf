@@ -1,0 +1,23 @@
+// Lesson 8 — finger joints
+// A floor and a back wall joined along their shared edge.
+
+material("ply3", thickness = 3, color = "wood", sheet = [300, 200]);
+t = thickness("ply3");
+
+L = 100;     // length of the joint (x)
+D = 60;      // floor depth (y)
+H = 50;      // wall height (z)
+n = finger_count(L, 12);    // an odd number of fingers about 12 mm wide
+
+// Floor: stops t short of the back edge; its tabs (odd segments) fill that strip.
+part("floor", "ply3") union() {
+  square([L, D - t]);
+  translate([0, D - t]) finger_tabs(L, t, n, odd = true);
+}
+
+// Wall: its own body starts t up; its tabs (even segments) reach down to the floor.
+translate([0, D - t, 0]) face_y(t)
+  part("wall", "ply3") union() {
+    translate([0, t]) square([L, H - t]);
+    finger_tabs(L, t, n, odd = false);
+  }

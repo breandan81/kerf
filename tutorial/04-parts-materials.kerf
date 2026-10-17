@@ -1,0 +1,10 @@
+// Lesson 4 — parts and materials
+// A part is one physical piece cut from one material.
+
+material("ply3", thickness = 3, color = "wood", kerf = 0.12, sheet = [300, 200]);
+material("acrylic", thickness = 3, color = [0.7, 0.85, 1], opacity = 0.6, sheet = [300, 200]);
+
+part("coaster", "ply3", qty = 4) rounded_square([90, 90], r = 12);
+
+// parts all start at the origin; move this one so it doesn't sit inside the coaster
+translate([110, 0, 0]) part("sign", "acrylic") rounded_square([150, 60], r = 8);

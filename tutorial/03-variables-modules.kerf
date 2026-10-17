@@ -1,0 +1,18 @@
+// Lesson 3 — variables, loops and modules
+// Change a number at the top and everything follows.
+
+W = 90;        // plate width
+H = 50;        // plate height
+r = 6;         // corner radius
+hole = 4;      // screw hole diameter
+inset = 8;     // hole distance from the edges
+
+module plate(w, h) {
+  difference() {
+    rounded_square([w, h], r = r);
+    for (x = [inset, w - inset], y = [inset, h - inset])
+      translate([x, y]) circle(d = hole);
+  }
+}
+
+plate(W, H);

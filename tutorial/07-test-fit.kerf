@@ -1,0 +1,22 @@
+// Lesson 7 — test fitting
+// Reference objects (%) are shown in 3D and checked for collisions,
+// but they are never cut.
+
+material("ply6", thickness = 6, color = "wood", sheet = [300, 200]);
+material("ply3", thickness = 3, color = [0.85, 0.7, 0.5], sheet = [300, 200]);
+
+t  = thickness("ply3");
+tb = thickness("ply6");
+gap = 0.2;
+
+part("base", "ply6")
+  difference() {
+    rounded_square([120, 50], r = 6);
+    translate([20, 25 - (t + gap) / 2]) square([80, t + gap]);
+  }
+
+translate([20, 25 - t / 2, 0]) face_y(t)
+  part("panel", "ply3") square([80, 70]);
+
+// a phone propped on the base in front of the panel
+%translate([25, 6, tb]) cube([70, 9, 140]);

@@ -9,6 +9,7 @@ import { sheetToSVG } from './geom/export.js';
 import { findInterference, solidsAsPrisms } from './geom/interfere.js';
 import { bounds } from './geom/clip.js';
 import { HELP } from './help.js';
+import { LESSONS } from './tutorial.js';
 
 const $ = id => document.getElementById(id);
 const store = {
@@ -365,6 +366,73 @@ const applyTheme = () => {
 };
 matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyTheme);
 
+// ------------------------------------------------------------------ tutorial
+// Lessons live in <project>/tutorial/, copied from the app the first time so
+// your edits survive; Reset copies the original back.
+let lesson = store.get('lesson', 0);
+const tutPath = l => 'tutorial/' + l.file;
+
+async function copyFromApp(src, dest) {
+  const blob = await (await api(src)).blob();
+  await api('/api/file?path=' + encodeURIComponent(dest), { method: 'POST', body: blob });
+}
+
+async function openLesson(i, { reset = false } = {}) {
+  lesson = Math.max(0, Math.min(LESSONS.length - 1, i));
+  store.set('lesson', lesson);
+  const L = LESSONS[lesson];
+  showLesson();
+  const { files } = await (await api('/api/ls')).json();
+  for (const a of L.assets || []) if (!files.includes('tutorial/' + a)) await copyFromApp('examples/' + a, 'tutorial/' + a);
+  if (reset || !files.includes(tutPath(L))) {
+    await copyFromApp('tutorial/' + L.file, tutPath(L));
+    if (reset && current === tutPath(L)) savedText = editor.getValue(); // discard edits without asking again
+  }
+  await listFiles(current);
+  if (current !== tutPath(L) || reset) {
+    if (reset) current = null;
+    await openFile(tutPath(L));
+  }
+}
+
+function showLesson() {
+  const L = LESSONS[lesson];
+  const done = store.get('tasks', {});
+  $('tutsel').value = String(lesson);
+  $('tutbody').innerHTML = `<div class="step">Lesson ${lesson + 1} of ${LESSONS.length}</div><h2>${L.title}</h2>${L.html}
+    <div class="tut-tasks"><h3>Try it</h3>${L.tasks.map((t, k) => {
+      const key = L.file + ':' + k;
+      return `<label class="${done[key] ? 'done' : ''}"><input type="checkbox" data-key="${key}" ${done[key] ? 'checked' : ''}><span>${t}</span></label>`;
+    }).join('')}</div>`;
+  $('tutbody').scrollTop = 0;
+  for (const cb of $('tutbody').querySelectorAll('input[type=checkbox]')) {
+    cb.addEventListener('change', () => {
+      const d = store.get('tasks', {});
+      d[cb.dataset.key] = cb.checked;
+      store.set('tasks', d);
+      cb.parentElement.classList.toggle('done', cb.checked);
+    });
+  }
+  $('tutprev').disabled = lesson === 0;
+  $('tutnext').textContent = lesson === LESSONS.length - 1 ? 'Done' : 'Next →';
+}
+
+function setTutorial(open) {
+  $('tutorial').hidden = !open;
+  store.set('tutOpen', open);
+  editor.refresh();
+  if (open) openLesson(lesson);
+}
+LESSONS.forEach((L, i) => $('tutsel').add(new Option(`${i + 1}. ${L.title}`, String(i))));
+$('tutsel').addEventListener('change', e => openLesson(+e.target.value));
+$('tutbtn').addEventListener('click', () => setTutorial($('tutorial').hidden));
+$('tutclose').addEventListener('click', () => setTutorial(false));
+$('tutprev').addEventListener('click', () => openLesson(lesson - 1));
+$('tutnext').addEventListener('click', () => (lesson === LESSONS.length - 1 ? setTutorial(false) : openLesson(lesson + 1)));
+$('tutreset').addEventListener('click', () => {
+  if (confirm(`Restore lesson ${lesson + 1}'s original code? Your changes to it will be lost.`)) openLesson(lesson, { reset: true });
+});
+
 // ------------------------------------------------------------------ boot
 (async () => {
   applyTheme();
@@ -373,6 +441,8 @@ matchMedia('(prefers-color-scheme: light)').addEventListener('change', applyThem
   setView(view);
   const want = new URLSearchParams(location.search).get('file') || store.get('file');
   const first = files.includes(want) ? want : (files.includes('box.kerf') ? 'box.kerf' : files[0]);
-  if (first) await openFile(first);
+  // first visit: start with the tutorial open
+  if (store.get('tutOpen', true)) setTutorial(true);
+  else if (first) await openFile(first);
   window.kerf = { editor, render, get result() { return result; }, get sheets() { return sheetsResult; }, get hits() { return hits; }, setView, v3, v2 };
 })();

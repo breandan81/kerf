@@ -1,0 +1,5 @@
+// Lesson 1 — first shapes
+// Units are millimetres. x goes right, y goes up.
+
+square([60, 40]);                       // 60 wide, 40 tall, corner at the origin
+translate([80, 20]) circle(r = 15);     // move a circle so its centre is at (80, 20)

@@ -119,4 +119,33 @@ test('reference objects take part in the fit check', () => {
   const hits = findInterference(big.parts, { refs: solidsAsPrisms(big.solids) });
   assert(hits.length && hits.every(h => h.b.ref), JSON.stringify(hits.map(h => [h.a.name, h.b.name])));
 });
+
+const lessons = fs.readdirSync(new URL('../tutorial/', import.meta.url)).filter(f => f.endsWith('.kerf')).sort();
+const lesson = f => fs.readFileSync(new URL('../tutorial/' + f, import.meta.url), 'utf8');
+const fit = r => findInterference(r.parts, { refs: solidsAsPrisms(r.solids) });
+for (const f of lessons) test(`tutorial ${f} runs clean`, () => {
+  const r = run(lesson(f));
+  assert(r.parts.length > 0);
+  assert.equal(r.warnings.length, 0, JSON.stringify(r.warnings));
+  assert.equal(fit(r).length, 0, fit(r).map(h => h.a.name + '×' + h.b.name).join());
+  assert.equal(layoutParts(r.parts).warnings.length, 0);
+});
+test('tutorial 7: the "break it" tasks are caught', () => {
+  const src = lesson('07-test-fit.kerf');
+  assert(fit(run(src.replace('gap = 0.2;', 'gap = -0.5;'))).some(h => h.a.name === 'base' && h.b.name === 'panel'));
+  const tight = fit(run(src.replace('gap = 0.2;', 'gap = -0.1;')));
+  assert(tight.length === 1 && Math.abs(tight[0].volume - 0.1 * 80 * 6) < 1, 'expected 48 mm³, got ' + tight.map(h => h.volume));
+  assert.equal(fit(run(src.replace('gap = 0.2;', 'gap = 0;'))).length, 0); // touching is not a collision
+  assert(fit(run(src.replace('cube([70, 9, 140])', 'cube([70, 20, 140])'))).some(h => h.b.ref));
+});
+test('tutorial 8: floor and wall actually meet', () => {
+  const r = run(lesson('08-finger-joints.kerf'));
+  const grown = r.parts.map(p => ({ ...p, shape: { ...p.shape, body: clip.offset(p.shape.body, 0.3) } }));
+  assert.equal(findInterference(grown).length, 1);
+  assert.equal(fit(run(lesson('08-finger-joints.kerf').replace('odd = false', 'odd = true'))).length, 1);
+});
+test('tutorial 9: comb labels', () => {
+  const r = run(lesson('09-kerf-and-fit.kerf').replace('part("kerf square"', 'echo(widths); part("kerf square"'));
+  assert.equal(r.echo[0].text, '[2.7, 2.8, 2.9, 3, 3.1, 3.2, 3.3]');
+});
 console.log(`${n} passed`);

@@ -1,0 +1,26 @@
+// Lesson 9 — kerf and fit: a test card to cut on YOUR laser
+// 1. A 20 mm square to measure the kerf.
+// 2. A comb of slots, 0.1 mm apart, to find the press-fit you like.
+
+material("ply3", thickness = 3, color = "wood", kerf = 0.12, sheet = [300, 200]);
+t = thickness("ply3");
+
+steps  = [-3 : 3];                          // -0.3 … +0.3 mm around t
+widths = [for (i = steps) t + i * 0.1];
+pitch  = 14;
+
+part("kerf square", "ply3") {
+  square(20);
+  engrave() translate([10, 10]) text("20", size = 6, halign = "center", valign = "center");
+}
+
+translate([30, 0, 0]) part("fit comb", "ply3") {
+  difference() {
+    square([len(widths) * pitch + 4, 40]);
+    for (i = [0 : len(widths) - 1])
+      translate([6 + i * pitch, 18]) square([widths[i], 22.01]);   // open at the top
+  }
+  for (i = [0 : len(widths) - 1])
+    engrave() translate([6 + i * pitch + widths[i] / 2, 8])
+      text(str(widths[i]), size = 3, halign = "center");
+}
