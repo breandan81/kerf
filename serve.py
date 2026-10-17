@@ -129,7 +129,7 @@ def main():
     if not os.path.isdir(root):
         os.makedirs(root)
     if not any(n.endswith('.kerf') for n in os.listdir(root)):
-        shutil.copytree(os.path.join(APP_DIR, 'examples'), root, dirs_exist_ok=True)
+        shutil.copytree(os.path.join(APP_DIR, 'examples'), root, dirs_exist_ok=True, ignore=shutil.ignore_patterns('LICENSE'))
     Handler.root = root
     srv = ThreadingHTTPServer(('127.0.0.1', a.port), Handler)
     print(f'Kerf: http://127.0.0.1:{a.port}/   project: {root}')

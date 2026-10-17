@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT — free to use in your own designs, see LICENSE-MIT
 // Hinges.                              use <hinges.kerf>
 //
 //   hinged_box([120, 80, 50], "ply3", lid_h = 20, pin_d = 3);

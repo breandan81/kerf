@@ -11,5 +11,5 @@ for a in mode edit comment dialog search; do cp -r vendor/codemirror/addon/$a di
 cp vendor/three/build/three.module.js vendor/three/build/three.core.js dist/vendor/three/build/
 cp vendor/three/addons/controls/OrbitControls.js dist/vendor/three/addons/controls/
 # list of example files to seed a new browser project with
-(cd examples && find . -type f ! -name manifest.json | sed 's#^\./##' | sort | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin]))') > dist/examples/manifest.json
+(cd examples && find . -type f ! -name manifest.json ! -name LICENSE | sed 's#^\./##' | sort | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin]))') > dist/examples/manifest.json
 echo "built dist/ ($(du -sh dist | cut -f1))"

@@ -30,7 +30,7 @@ function argFile(argv) {
 function seedRoot() {
   if (fs.existsSync(ROOT) && fs.readdirSync(ROOT).some(n => n.endsWith('.kerf'))) return;
   fs.mkdirSync(ROOT, { recursive: true });
-  fs.cpSync(path.join(APP_DIR, 'examples'), ROOT, { recursive: true, filter: s => !s.endsWith('manifest.json') });
+  fs.cpSync(path.join(APP_DIR, 'examples'), ROOT, { recursive: true, filter: s => !s.endsWith('manifest.json') && !s.endsWith('LICENSE') });
 }
 
 const abs = p => (path.isAbsolute(p) ? p : path.join(ROOT, p));

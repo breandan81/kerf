@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "OpenSCAD-style code CAD for laser cutting",
   "author": "Breandan O'Shaughnessy",
-  "license": "UNLICENSED",
+  "license": "AGPL-3.0-or-later",
   "main": "main.js",
   "private": true,
   "devDependencies": {

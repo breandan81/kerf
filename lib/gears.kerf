@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT — free to use in your own designs, see LICENSE-MIT
 // Involute spur gears.            use <gears.kerf>
 //
 // Gears mesh when they share `mod` (tooth size: pitch diameter / teeth) and

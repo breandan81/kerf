@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT — free to use in your own designs, see LICENSE-MIT
 // Parametric finger-jointed boxes.      use <boxes.kerf>
 //
 //   finger_box([120, 80, 60], "ply3");                  // open box, all parts placed in 3D

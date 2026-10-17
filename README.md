@@ -193,6 +193,16 @@ npm test        # language, geometry, joints, libraries (box fit, hinge swing, g
 The headless UI tests in `test/` (`smoke`, `ui`, `tutorial`, `files`, `hosted`, `desktop`) drive Chrome or the
 AppImage and need `KERF_URL` or a built app; each file's header shows how to run it.
 
+## Licence
+
+- **The Kerf app** (everything outside the folders below) is under the [GNU AGPL v3](LICENSE) or later. You can use,
+  change and share it. If you distribute a modified version, or run one as a website for others, you must offer
+  its source under the same licence.
+- **The libraries, examples and tutorial lessons** (`lib/`, `examples/`, `tutorial/`) are under the
+  [MIT licence](LICENSE-MIT), so designs that `use` or `include` them, or start from them, are yours to license
+  however you like.
+- **Your own designs**, and the SVGs Kerf exports, belong to you. Neither licence applies to them.
+
 ## Credits
 
 Kerf bundles three.js, CodeMirror 5, opentype.js and Clipper (see [vendor/LICENSES.md](vendor/LICENSES.md)), and
