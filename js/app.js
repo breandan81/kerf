@@ -522,7 +522,8 @@ $('tutreset').addEventListener('click', () => {
   const want = new URLSearchParams(location.search).get('file') || store.get('file');
   const first = files.includes(want) ? want : (files.includes('box.kerf') ? 'box.kerf' : files[0]);
   // first visit: start with the tutorial open
-  if (store.get('tutOpen', true)) setTutorial(true);
+  const linked = new URLSearchParams(location.search).has('file'); // a linked file wins over the tutorial
+  if (store.get('tutOpen', true) && !linked) setTutorial(true);
   else if (first) await openFile(first);
   window.kerf = { editor, render, get result() { return result; }, get sheets() { return sheetsResult; }, get hits() { return hits; }, setView, v3, v2 };
 })();
