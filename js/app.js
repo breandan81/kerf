@@ -10,6 +10,7 @@ import { findInterference, solidsAsPrisms } from './geom/interfere.js';
 import { bounds } from './geom/clip.js';
 import { HELP } from './help.js';
 import { LESSONS } from './tutorial.js';
+import { detectStore, seedExamples, FolderStore, BrowserStore, canPickFolder, meta } from './storage.js';
 
 const $ = id => document.getElementById(id);
 const store = {
@@ -61,6 +62,7 @@ let hits = [];
 let selected = null;
 let view = store.get('view', '3d');
 let renderSeq = 0;
+let store_ = null; // file storage backend (storage.js)
 
 const imageFor = src => res.imageElement(src);
 const pick = p => { selected = p ? p.id : null; refreshViews(); };
@@ -68,26 +70,29 @@ const v3 = new View3D($('v3d'), { imageFor, onPick: pick });
 const v2 = new View2D($('v2d'), { imageFor, onPick: pick });
 
 // ------------------------------------------------------------------ files
-async function api(path, opts) {
-  const r = await fetch(path, opts);
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
-  return r;
-}
-
 async function listFiles(select) {
-  const { files, root } = await (await api('/api/ls')).json();
+  const files = await store_.list();
   const kerf = files.filter(f => f.endsWith('.kerf') || f.endsWith('.scad'));
   const sel = $('file');
   sel.innerHTML = '';
   for (const f of kerf) sel.add(new Option(f, f));
-  sel.title = 'Project: ' + root;
   if (select) sel.value = select;
   return kerf;
 }
 
+function showWhere() {
+  const k = store_.kind;
+  $('where').textContent = k === 'server' ? '' : k === 'folder' ? '📁 ' + store_.label : 'saved in this browser';
+  $('where').title = k === 'server' ? '' : k === 'folder'
+    ? 'Files are read from and saved to this folder on your computer'
+    : 'Files are kept in this browser only. Use "Open folder…" (Chrome/Edge) to work on real files.';
+  $('openfolder').hidden = k === 'server' || !canPickFolder();
+  $('upload').hidden = k === 'server';
+}
+
 async function openFile(path) {
   if (isDirty() && !confirm(`Discard unsaved changes to ${current}?`)) { $('file').value = current; return; }
-  const text = await (await api('/api/file?path=' + encodeURIComponent(path))).text();
+  const text = await (await store_.read(path)).text();
   current = path;
   savedText = text;
   res.base = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
@@ -105,7 +110,7 @@ async function openFile(path) {
 async function save() {
   if (!current) return;
   const text = editor.getValue();
-  await api('/api/file?path=' + encodeURIComponent(current), { method: 'POST', body: text });
+  await store_.write(current, text);
   savedText = text;
   updateDirty();
   log('ok', `saved ${current}`);
@@ -123,7 +128,7 @@ $('new').addEventListener('click', async () => {
   const files = await listFiles();
   if (files.includes(name)) return openFile(name);
   const tmpl = `// ${name}\nmaterial("ply3", thickness = 3, sheet = [400, 300], kerf = 0.1);\n\npart("plate", "ply3") {\n  difference() {\n    rounded_square([80, 50], r = 4);\n    translate([10, 25]) circle(d = 4);\n  }\n  engrave() translate([45, 25]) text("Kerf", size = 10, halign = "center", valign = "center");\n}\n`;
-  await api('/api/file?path=' + encodeURIComponent(name), { method: 'POST', body: tmpl });
+  await store_.write(name, tmpl);
   await listFiles(name);
   savedText = editor.getValue(); // the old file's dirty state was already confirmed
   current = null;
@@ -167,6 +172,7 @@ async function render({ manual = false } = {}) {
   clearMarks();
   $('console').innerHTML = '';
   for (const [k, msg] of res.failed) if (src.includes(k.split(':').slice(1).join(':').split('/').pop())) log('err', msg);
+  for (const [name, msg] of res.notes) if (src.includes(name)) log('warn', 'FONT: ' + msg);
   if (error) {
     const where = error.line ? `${error.file && error.file !== current ? error.file + ', ' : ''}line ${error.line}` : '';
     log('err', `ERROR: ${error.message}${where ? ' (' + where + ')' : ''}`, error instanceof KerfError && error.file === (current || 'main') ? error.line : null);
@@ -325,15 +331,84 @@ $('export').addEventListener('click', async () => {
   for (const s of sheetsResult.sheets) {
     const svg = sheetToSVG(s, { kerf });
     const name = `export/${stem.split('/').pop()}-${s.material.name}-${s.index + 1}.svg`.replace(/[^\w./-]+/g, '_');
-    await api('/api/file?path=' + encodeURIComponent((res.base ? res.base + '/' : '') + name), { method: 'POST', body: svg });
+    if (store_.kind === 'browser') download(name.split('/').pop(), svg);
+    else await store_.write((res.base ? res.base + '/' : '') + name, svg);
     written.push(name);
   }
+  if (store_.kind === 'browser') return log('ok', `Downloaded ${written.length} SVG${written.length > 1 ? 's' : ''} (kerf compensation ${kerf ? 'on' : 'off'}): ${written.map(w => w.split('/').pop()).join(', ')}`);
   log('ok', `Exported ${written.length} sheet${written.length > 1 ? 's' : ''} (kerf compensation ${kerf ? 'on' : 'off'}):\n  ` + written.join('\n  '));
 });
 $('kerfcomp').checked = store.get('kerfcomp', true);
 $('kerfcomp').addEventListener('change', e => store.set('kerfcomp', e.target.checked));
 $('auto').checked = store.get('auto', true);
 $('auto').addEventListener('change', e => store.set('auto', e.target.checked));
+
+function download(name, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'image/svg+xml' }));
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+// ------------------------------------------------------------------ storage: folder / uploads
+async function useStore(st) {
+  store_ = st;
+  res.store = st;
+  res.refreshFiles();
+  showWhere();
+  current = null;
+  savedText = '';
+  const files = await listFiles();
+  if (!$('tutorial').hidden && files.length) return openLesson(lesson);
+  const want = store.get('file');
+  const first = files.includes(want) ? want : (files.includes('box.kerf') ? 'box.kerf' : files[0]);
+  if (first) await openFile(first);
+  else { editor.setValue(''); savedText = ''; updateDirty(); }
+}
+
+$('openfolder').addEventListener('click', async () => {
+  if (isDirty() && !confirm(`Discard unsaved changes to ${current}?`)) return;
+  let handle = null;
+  // re-grant a remembered folder first
+  try {
+    const h = await meta.get('folder');
+    if (h && store_.kind !== 'folder' && (await h.requestPermission({ mode: 'readwrite' })) === 'granted' &&
+        confirm(`Reopen folder "${h.name}"? (Cancel to pick a different one)`)) handle = h;
+  } catch { /* none remembered */ }
+  if (!handle) {
+    try { handle = await window.showDirectoryPicker({ mode: 'readwrite', id: 'kerf' }); } catch { return; }
+  }
+  await meta.set('folder', handle);
+  const st = new FolderStore(handle);
+  const files = await st.list();
+  if (!files.some(f => /\.(kerf|scad)$/.test(f)) && confirm(`"${handle.name}" has no .kerf files yet. Copy the example projects into it?`)) await seedExamples(st);
+  await useStore(st);
+  log('ok', `Working in folder "${handle.name}"`);
+});
+
+async function addFiles(fileList) {
+  const dir = res.base ? res.base + '/' : '';
+  const names = [];
+  for (const f of fileList) {
+    await store_.write(dir + f.name, f);
+    names.push(dir + f.name);
+  }
+  res.refreshFiles();
+  await listFiles(current);
+  log('ok', `Added ${names.join(', ')}. Use them with e.g. image("${names[0].slice(dir.length)}") or import(...).`);
+  render({ manual: true });
+}
+$('upload').addEventListener('click', () => $('uploadinput').click());
+$('uploadinput').addEventListener('change', e => { if (e.target.files.length) addFiles([...e.target.files]); e.target.value = ''; });
+// drop files anywhere on the page
+window.addEventListener('dragover', e => { if (store_ && store_.kind !== 'server') e.preventDefault(); });
+window.addEventListener('drop', e => {
+  if (!store_ || store_.kind === 'server' || !e.dataTransfer.files.length) return;
+  e.preventDefault();
+  addFiles([...e.dataTransfer.files]);
+});
 
 // ------------------------------------------------------------------ help, keys, splitter
 $('helpcontent').innerHTML = HELP;
@@ -373,8 +448,9 @@ let lesson = store.get('lesson', 0);
 const tutPath = l => 'tutorial/' + l.file;
 
 async function copyFromApp(src, dest) {
-  const blob = await (await api(src)).blob();
-  await api('/api/file?path=' + encodeURIComponent(dest), { method: 'POST', body: blob });
+  const r = await fetch(src);
+  if (!r.ok) throw new Error(`missing ${src}`);
+  await store_.write(dest, await r.blob());
 }
 
 async function openLesson(i, { reset = false } = {}) {
@@ -382,7 +458,7 @@ async function openLesson(i, { reset = false } = {}) {
   store.set('lesson', lesson);
   const L = LESSONS[lesson];
   showLesson();
-  const { files } = await (await api('/api/ls')).json();
+  const files = await store_.list();
   for (const a of L.assets || []) if (!files.includes('tutorial/' + a)) await copyFromApp('examples/' + a, 'tutorial/' + a);
   if (reset || !files.includes(tutPath(L))) {
     await copyFromApp('tutorial/' + L.file, tutPath(L));
@@ -437,6 +513,10 @@ $('tutreset').addEventListener('click', () => {
 (async () => {
   applyTheme();
   stdlib = await (await fetch('lib/stdlib.kerf')).text();
+  store_ = await detectStore();
+  res.store = store_;
+  if (store_.kind === 'browser') await seedExamples(store_);
+  showWhere();
   const files = await listFiles();
   setView(view);
   const want = new URLSearchParams(location.search).get('file') || store.get('file');

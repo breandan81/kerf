@@ -11,6 +11,9 @@ export class Resources {
     this.failed = new Map(); // key -> error message
     this.missing = new Map(); // key -> loader
     this.base = ''; // directory of the file being rendered, relative to project
+    this.store = null; // storage backend (see storage.js)
+    this.notes = new Map(); // font name -> substitution message for the console
+    this.bundled = null; // fonts shipped with the app (hosted mode)
   }
 
   resolve(path) {
@@ -30,29 +33,49 @@ export class Resources {
     return null;
   }
 
+  // "Family:style=Style" (installed font via the local server, or one bundled
+  // with the app when hosted), or a .ttf/.otf file in the project
   font(name) {
+    if (/\.(ttf|otf)$/i.test(name)) {
+      const p = this.resolve(name);
+      return this.get(this.fonts, 'font:' + p, async () => globalThis.opentype.parse(await (await this.store.read(p)).arrayBuffer()));
+    }
     return this.get(this.fonts, 'font:' + name, async () => {
-      const r = await fetch('/api/font?name=' + encodeURIComponent(name));
-      if (!r.ok) throw new Error(`font "${name}" not found`);
+      if (this.store.kind === 'server') {
+        const r = await fetch('/api/font?name=' + encodeURIComponent(name));
+        if (!r.ok) throw new Error(`font "${name}" not found`);
+        return globalThis.opentype.parse(await r.arrayBuffer());
+      }
+      if (!this.bundled) this.bundled = await (await fetch('fonts/fonts.json')).json();
+      const file = this.matchBundled(name);
+      const r = await fetch('fonts/' + file);
+      if (!r.ok) throw new Error(`font file ${file} missing`);
       return globalThis.opentype.parse(await r.arrayBuffer());
     });
   }
 
+  matchBundled(name) {
+    const [fam, style = 'Regular'] = name.split(':style=');
+    const keys = Object.keys(this.bundled);
+    const want = `${fam.trim()}:style=${style.trim()}`.toLowerCase();
+    let k = keys.find(x => x.toLowerCase() === want);
+    if (!k) {
+      k = keys.find(x => x.toLowerCase() === `${fam.trim().toLowerCase()}:style=regular`) || 'Liberation Sans:style=Regular';
+      this.notes.set(name, `font "${name}" isn't available here; using ${k.replace(':style=Regular', '')}. Built-in fonts: ` +
+        [...new Set(keys.map(x => x.split(':')[0]))].join(', ') + ' (or put a .ttf/.otf in your project and use font = "file.ttf")');
+    }
+    return this.bundled[k];
+  }
+
   text(path) {
     const p = this.resolve(path);
-    return this.get(this.texts, 'file:' + p, async () => {
-      const r = await fetch('/api/file?path=' + encodeURIComponent(p));
-      if (!r.ok) throw new Error(`file "${p}" not found`);
-      return r.text();
-    });
+    return this.get(this.texts, 'file:' + p, async () => (await this.store.read(p)).text());
   }
 
   image(path) {
     const p = this.resolve(path);
     return this.get(this.images, 'img:' + p, async () => {
-      const r = await fetch('/api/file?path=' + encodeURIComponent(p));
-      if (!r.ok) throw new Error(`image "${p}" not found`);
-      const blob = await r.blob();
+      const blob = await this.store.read(p);
       const src = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(blob); });
       const el = new Image();
       el.src = src;

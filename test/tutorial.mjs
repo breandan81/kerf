@@ -9,7 +9,7 @@ const errors = [];
 page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('dialog', d => d.accept());
-await page.goto('http://127.0.0.1:8790/', { waitUntil: 'load' });
+await page.goto((process.env.KERF_URL || 'http://127.0.0.1:8790/'), { waitUntil: 'load' });
 const wait = ms => new Promise(r => setTimeout(r, ms));
 for (let i = 0; i < 10; i++) {
   await page.waitForFunction(i => document.getElementById('file').value.startsWith(`tutorial/${String(i + 1).padStart(2, '0')}`) && kerf.result, { timeout: 10000 }, i);

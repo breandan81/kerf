@@ -7,7 +7,7 @@ await page.setViewport({ width: 1500, height: 900 });
 const errors = [];
 page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-await page.goto('http://127.0.0.1:8790/?file=sign.kerf', { waitUntil: 'networkidle0' });
+await page.goto((process.env.KERF_URL || 'http://127.0.0.1:8790/') + '?file=sign.kerf', { waitUntil: 'networkidle0' });
 await page.waitForFunction(() => window.kerf && kerf.result);
 await page.evaluate(() => kerf.setView('3d'));
 await page.click('#export');
