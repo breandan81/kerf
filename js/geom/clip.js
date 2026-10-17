@@ -23,7 +23,23 @@ function exec(op, subj, clip, fillSubj = 'nonzero', fillClip = 'nonzero') {
 
 export function union(paths, fill = 'nonzero') {
   if (!paths.length) return [];
-  return exec(C().ClipType.ctUnion, paths, [], fill, fill);
+  const out = exec(C().ClipType.ctUnion, paths, [], fill, fill);
+  return out.filter(p => area(p) > 0).length > 1 ? closeSeams(out) : out;
+}
+
+// Clipper leaves shapes that only share an edge (a finger tab whose base lies
+// along the middle of a panel's edge) as separate pieces, which would put a
+// cut line along the seam. Grow then shrink by a hair to fuse them.
+function closeSeams(paths) {
+  const L = C();
+  const run = (ps, d) => {
+    const co = new L.ClipperOffset(2, 1);
+    co.AddPaths(ps, L.JoinType.jtMiter, L.EndType.etClosedPolygon);
+    const o = [];
+    co.Execute(o, d);
+    return o;
+  };
+  return toFloat(run(run(toInt(paths), 2), -2)).filter(p => p.length >= 3);
 }
 export function difference(a, b) {
   if (!a.length) return [];

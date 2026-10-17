@@ -1,0 +1,93 @@
+// Parametric finger-jointed boxes.      use <boxes.kerf>
+//
+//   finger_box([120, 80, 60], "ply3");                  // open box, all parts placed in 3D
+//   finger_box([120, 80, 60], "ply3", top = "lid");     // with a lift-off lid
+//   finger_box([100, 60, 40], "ply3", inside = true);   // size is the inside
+//
+// Sizes are outside dimensions [x, y, z] unless inside = true. The box sits
+// with its outside corner at the origin. Engraving on the walls faces out.
+//
+// To cut holes or engrave a panel, build the parts yourself from the pieces:
+//
+//   size = [120, 80, 60]; t = thickness("ply3");
+//   for (w = ["bottom", "back", "left", "right"]) box_place(w, size, t) part(w, "ply3") box_panel(w, size, t);
+//   box_place("front", size, t) part("front", "ply3") difference() {
+//     box_panel("front", size, t);
+//     translate([60, 30]) circle(d = 20);
+//   }
+
+// One flat panel w × h with finger-jointed edges. edges = [bottom, right,
+// top, left], each: 0 plain, 1 fingers that fit between the other panel's,
+// 2 fingers that own the corners. Two mating edges: one 1, one 2.
+module fj_panel(w, h, t, edges = [1, 2, 0, 2], fw = 12) {
+  e = edges;
+  x0 = e[3] ? t : 0;
+  x1 = e[1] ? w - t : w;
+  y0 = e[0] ? t : 0;
+  y1 = e[2] ? h - t : h;
+  translate([x0, y0]) square([x1 - x0, y1 - y0]);
+  if (e[0]) translate([x0, 0]) finger_tabs(x1 - x0, t, odd = e[0] == 1, w = fw);
+  if (e[2]) translate([x0, h - t]) finger_tabs(x1 - x0, t, odd = e[2] == 1, w = fw);
+  if (e[3]) translate([t, y0]) rotate(90) finger_tabs(y1 - y0, t, odd = e[3] == 1, w = fw);
+  if (e[1]) translate([w, y0]) rotate(90) finger_tabs(y1 - y0, t, odd = e[1] == 1, w = fw);
+  for (c = [[0, 3, 0, 0], [0, 1, w - t, 0], [2, 1, w - t, h - t], [2, 3, 0, h - t]])
+    if (e[c[0]] == 2 && e[c[1]] == 2) translate([c[2], c[3]]) square(t);
+}
+
+// The 2D outline of one panel of a standard box: "bottom", "top", "front",
+// "back", "left", "right". top = "open" | "closed" | "lid" (lid = open walls).
+// Front/back own the vertical corners; bottom/top own their corners.
+module box_panel(which, size, t, top = "open", fw = 12) {
+  W = size[0]; D = size[1]; H = size[2];
+  tj = top == "closed" ? 1 : 0;
+  if (which == "bottom" || which == "top") fj_panel(W, D, t, [2, 2, 2, 2], fw);
+  else if (which == "front" || which == "back") fj_panel(W, H, t, [1, 2, tj, 2], fw);
+  else if (which == "left" || which == "right") fj_panel(D, H, t, [1, 1, tj, 1], fw);
+}
+
+// Put a part where a panel goes in a box of `size` with its outside corner
+// at the origin. Walls face outward: the side you engrave ends up outside.
+// Front/back panels are size.x wide; left/right run along y (local x = y for
+// "right", reversed for "left", so text reads correctly from outside).
+module box_place(which, size, t) {
+  W = size[0]; D = size[1]; H = size[2];
+  if (which == "bottom") children();
+  else if (which == "top") translate([0, 0, H - t]) children();
+  else if (which == "front") translate([0, t, 0]) rotate([90, 0, 0]) children();
+  else if (which == "back") translate([W, D - t, 0]) rotate([90, 0, 180]) children();
+  else if (which == "right") translate([W - t, 0, 0]) rotate([90, 0, 90]) children();
+  else if (which == "left") translate([t, D, 0]) rotate([90, 0, -90]) children();
+}
+
+// outside size from an inside size
+function box_outside(size, t, top = "open") =
+  [size[0] + 2 * t, size[1] + 2 * t, size[2] + (top == "closed" ? 2 : 1) * t];
+
+// A whole box as parts named <name>_bottom, <name>_front, ...
+//   top: "open", "closed", or "lid" (a lift-off lid: a plate plus a lip that
+//   drops inside the walls; glue the two together)
+//   gap: clearance around the lid lip   label: engraved on the front (or lid)
+module finger_box(size, material, top = "open", inside = false, fw = 12, gap = 0.3,
+                  label = "", font = "Liberation Sans:style=Bold", label_size = 10, name = "box") {
+  t = thickness(material);
+  S = inside ? box_outside(size, t, top) : size;
+  W = S[0]; D = S[1]; H = S[2];
+  walls = top == "closed" ? ["bottom", "top", "front", "back", "left", "right"]
+                          : ["bottom", "front", "back", "left", "right"];
+  for (w = walls)
+    box_place(w, S, t) part(str(name, "_", w), material) {
+      box_panel(w, S, t, top, fw);
+      if (w == (top == "closed" ? "top" : "front") && label != "")
+        engrave() translate(w == "top" ? [W / 2, D / 2] : [W / 2, H / 2])
+          text(label, size = label_size, font = font, halign = "center", valign = "center");
+    }
+  if (top == "lid") {
+    translate([0, 0, H]) part(str(name, "_lid"), material) {
+      square([W, D]);
+      if (label != "") engrave() translate([W / 2, D / 2])
+        text(label, size = label_size, font = font, halign = "center", valign = "center");
+    }
+    translate([t + gap, t + gap, H - t]) part(str(name, "_lid_lip"), material)
+      square([W - 2 * (t + gap), D - 2 * (t + gap)]);
+  }
+}

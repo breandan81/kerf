@@ -1,0 +1,32 @@
+// Two meshing gears on a base plate, axle holes exactly the right distance apart.
+use <gears.kerf>
+
+material("ply3", thickness = 3, color = "wood", kerf = 0.12, sheet = [400, 300]);
+t = thickness("ply3");
+
+m = 2;        // module: tooth size (pitch diameter / teeth); gears must share it
+z1 = 30;      // teeth on the big gear
+z2 = 12;      // teeth on the small one
+axle = 5;     // axle / dowel diameter
+play = 0.15;  // extra centre distance so laser-cut teeth don't bind
+
+d = gear_distance(z1, z2, m) + play;
+echo("centre distance", d, "ratio", gear_ratio(z2, z1));
+
+R1 = gear_outer_r(z1, m);
+R2 = gear_outer_r(z2, m);
+part("base", "ply3") difference() {
+  translate([-R1 - 8, -R1 - 8]) rounded_square([d + R1 + R2 + 16, 2 * R1 + 16], r = 8);
+  circle(d = axle);
+  translate([d, 0]) circle(d = axle);
+}
+
+// turn `a` to watch them roll in the 3D view
+a = 0;
+translate([0, 0, t + 1]) {
+  rotate(a) part("big", "ply3") {
+    gear(z1, mod = m, bore = axle);
+    engrave() translate([0, 12]) text(str(z1), size = 7, halign = "center", valign = "center");
+  }
+  gear_mesh(z1, z2, m, a1 = a, extra = play) part("small", "ply3") gear(z2, mod = m, bore = axle);
+}

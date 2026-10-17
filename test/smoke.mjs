@@ -8,7 +8,7 @@ await page.setViewport({ width: 1500, height: 900 });
 const errors = [];
 page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.text()); });
 page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
-await page.goto((process.env.KERF_URL || 'http://127.0.0.1:8790/') + '?file=' + file, { waitUntil: 'networkidle0' });
+await page.goto((process.env.KERF_URL || 'http://127.0.0.1:8790/') + '?file=' + file, { waitUntil: 'load' });
 await page.waitForFunction(() => window.kerf && window.kerf.result, { timeout: 15000 }).catch(() => {});
 await new Promise(r => setTimeout(r, 800));
 const info = await page.evaluate(() => ({

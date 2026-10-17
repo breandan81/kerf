@@ -77,6 +77,17 @@ export class Resources {
     return this.get(this.texts, 'file:' + p, async () => (await this.store.read(p)).text());
   }
 
+  // include<>/use<>: the project first, then Kerf's built-in libraries (lib/)
+  lib(path, builtinOnly = false) {
+    const p = this.resolve(path);
+    return this.get(this.texts, (builtinOnly ? 'builtin:' : 'lib:') + p, async () => {
+      if (!builtinOnly) try { return await (await this.store.read(p)).text(); } catch { /* not in the project */ }
+      const r = await fetch('lib/' + path.replace(/^(\.\/)+/, ''));
+      if (r.ok && !(r.headers.get('content-type') || '').includes('html')) return r.text();
+      throw new Error(`"${path}" not found in your project or in the built-in libraries (boxes.kerf, hinges.kerf, gears.kerf)`);
+    });
+  }
+
   image(path) {
     const p = this.resolve(path);
     return this.get(this.images, 'img:' + p, async () => {

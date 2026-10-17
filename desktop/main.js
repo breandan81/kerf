@@ -7,9 +7,6 @@ const os = require('os');
 const { execFileSync } = require('child_process');
 const { pathToFileURL } = require('url');
 
-// Ubuntu 24.04+ blocks the setuid/namespace sandbox for AppImages; the app only
-// ever loads its own bundled pages, so run without it.
-app.commandLine.appendSwitch('no-sandbox');
 // if the GPU can't be used, keep WebGL (the 3D view) working in software
 app.commandLine.appendSwitch('enable-unsafe-swiftshader');
 

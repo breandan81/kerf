@@ -57,6 +57,27 @@ Units are mm. <b>F5</b> render · <b>Ctrl+S</b> save · <b>Ctrl+/</b> comment ·
 <tr><td>face_y(t) · face_x(t)</td><td>Stand a part up: facing -y (thickness y=0…t) or facing +x (thickness x=0…t).</td></tr>
 </table>
 
+<h3>Libraries</h3>
+<p><code>use &lt;file.kerf&gt;</code> imports a file's modules and functions; <code>include &lt;file.kerf&gt;</code> pastes the
+whole file in (its parts and variables too). Paths are relative to your file; if it isn't in your project, Kerf
+looks in its built-in libraries:</p>
+<table>
+<tr><td colspan=2><b>use &lt;boxes.kerf&gt;</b></td></tr>
+<tr><td>finger_box([x,y,z], "ply3", top="open", inside=false, fw=12, label="")</td><td>A whole finger-jointed box, every part placed in 3D. <code>top</code>: "open", "closed" or "lid" (lift-off lid with a lip). <code>inside=true</code>: size is the inside.</td></tr>
+<tr><td>box_panel(which, size, t, top) · box_place(which, size, t)</td><td>Build the box yourself to add holes/engraving: <code>box_place("front", size, t) part("front", "ply3") difference() { box_panel("front", size, t); … }</code>. which = bottom, top, front, back, left, right.</td></tr>
+<tr><td>fj_panel(w, h, t, edges=[b,r,t,l], fw=12)</td><td>Any finger-jointed panel. Each edge: 0 plain, 1 fingers between, 2 fingers owning the corners; mating edges use 1 and 2.</td></tr>
+<tr><td colspan=2><b>use &lt;hinges.kerf&gt;</b></td></tr>
+<tr><td>hinged_box([x,y,z], "ply3", lid_h=20, pin_d=3.2, gap=0.5, open=0, label="")</td><td>Box with a lid on two pins through ears at the back. <code>open</code> swings the lid in the 3D view to test-fit.</td></tr>
+<tr><td>bend_length(angle, r, t)</td><td>How long a <code>living_hinge</code> must be to bend that far around inside radius r.</td></tr>
+<tr><td>pivot_ear(at, r, d, a, b)</td><td>Round ear with a pin hole at <code>at</code>, joined to the panel edge a→b.</td></tr>
+<tr><td colspan=2><b>use &lt;gears.kerf&gt;</b></td></tr>
+<tr><td>gear(teeth, mod=2, pressure_angle=20, backlash=0.1, bore=0, flat=0)</td><td>Involute spur gear centred on the origin, a tooth on +x. <code>mod</code> = pitch diameter / teeth; meshing gears share it.</td></tr>
+<tr><td>gear_distance(t1, t2, mod)</td><td>Centre distance for two gears to mesh (add 0.1–0.2 mm for laser-cut gears).</td></tr>
+<tr><td>gear_mesh(t1, t2, mod, a1=0, dir=0, extra=0) { gear(t2) }</td><td>Places gear 2 meshing with a t1-tooth gear at the origin (turned a1°), in direction <code>dir</code>, rotated so the teeth interleave.</td></tr>
+<tr><td>gear_pitch_r · gear_outer_r · gear_root_r(teeth, mod) · gear_ratio(t1, t2) · gear_mesh_angle(t1, t2, a1, dir)</td><td></td></tr>
+<tr><td>rack(teeth, mod, base=5) · on_rack(teeth, mod, k) { gear(teeth) }</td><td>Straight rack along +x; on_rack puts a gear on it over the k-th gap.</td></tr>
+</table>
+
 <h3>Language</h3>
 <pre>w = 40;                                   // variables (last assignment wins)
 function area(a, b) = a * b;

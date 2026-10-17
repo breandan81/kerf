@@ -123,6 +123,7 @@ export class Interpreter {
     this.curFile = this.file;
     const prog = parse(src, this.file);
     const top = new Scope(null, null);
+    this.topScope = top;
     top.vars.set('$fn', 0);
     top.vars.set('$fa', 1);
     top.vars.set('$fs', 0.1);
@@ -176,19 +177,7 @@ export class Interpreter {
     const out = new Res();
     // hoist definitions and includes
     const body = [];
-    for (const s of stmts) {
-      if (s.type === 'moduledef') scope.mods.set(s.name, { def: s, scope });
-      else if (s.type === 'funcdef') scope.funcs.set(s.name, new Closure(s.params, s.expr, scope));
-      else if (s.type === 'include' || s.type === 'use') {
-        const inc = this.loadLib(s);
-        if (!inc) continue;
-        for (const t of inc.body) {
-          if (t.type === 'moduledef') scope.mods.set(t.name, { def: t, scope });
-          else if (t.type === 'funcdef') scope.funcs.set(t.name, new Closure(t.params, t.expr, scope));
-          else if (s.type === 'include') body.push(t);
-        }
-      } else body.push(s);
-    }
+    this.hoist(stmts, scope, body, []);
     // assignments first (OpenSCAD semantics); material() declarations run in
     // the same pass so `t = thickness("ply")` works anywhere in the file
     const early = s => s.type === 'assign' || (s.type === 'call' && s.name === 'material');
@@ -204,10 +193,47 @@ export class Interpreter {
     return out;
   }
 
+  // Definitions go into `scope`; anything else into `body`. include<> pastes
+  // the file in (recursively); use<> only imports its modules and functions,
+  // which keep seeing the library's own top-level variables (like OpenSCAD).
+  hoist(stmts, scope, body, stack) {
+    for (const s of stmts) {
+      if (s.type === 'moduledef') scope.mods.set(s.name, { def: s, scope });
+      else if (s.type === 'funcdef') scope.funcs.set(s.name, new Closure(s.params, s.expr, scope));
+      else if (s.type === 'include' || s.type === 'use') {
+        if (stack.includes(s.path)) throw this.err(`${s.path} includes itself (${[...stack, s.path].join(' → ')})`, s.line);
+        const inc = this.loadLib(s);
+        if (!inc) continue;
+        if (s.type === 'include') this.hoist(inc.body, scope, body, [...stack, s.path]);
+        else {
+          const lib = this.useLib(s.path, inc, [...stack, s.path]);
+          for (const [k, v] of lib.mods) scope.mods.set(k, v);
+          for (const [k, v] of lib.funcs) scope.funcs.set(k, v);
+        }
+      } else body.push(s);
+    }
+  }
+
+  useLib(path, prog, stack) {
+    this.libs = this.libs || new Map();
+    if (this.libs.has(path)) return this.libs.get(path);
+    const sc = new Scope(this.topScope, this.topScope);
+    this.libs.set(path, sc);
+    const body = [];
+    const saved = this.curFile;
+    this.curFile = path;
+    this.hoist(prog.body, sc, body, stack);
+    for (const s of body) if (s.type === 'assign') sc.vars.set(s.name, this.eval(s.expr, sc));
+    this.curFile = saved;
+    return sc;
+  }
+
   loadLib(s) {
     const path = s.path;
     let src = this.files[path];
-    if (src == null) src = this.res.text(path);
+    // gears.kerf doing `use <gears.kerf>` means the built-in one, not itself
+    const self = this.res.resolve && this.res.resolve(path) === this.file;
+    if (src == null) src = this.res.lib ? this.res.lib(path, self) : this.res.text(path);
     if (src == null) return null;
     try {
       return parse(src, path);
@@ -295,6 +321,7 @@ export class Interpreter {
 
   callUserModule(user, s, scope) {
     if (++this.depth > 2000) throw this.err('Recursion too deep', s.line);
+    const savedFile = this.curFile;
     try {
       const def = user.def;
       const sc = new Scope(user.scope, scope);
@@ -302,10 +329,12 @@ export class Interpreter {
       // children are evaluated in the caller's scope but see our $vars
       const kids = s.children.filter(c => c.type !== 'assign');
       const assigns = s.children.filter(c => c.type === 'assign');
-      sc.childInfo = { kids, assigns, scope };
+      sc.childInfo = { kids, assigns, scope, file: this.curFile };
       sc.vars.set('$children', kids.length);
+      if (def.file) this.curFile = def.file; // errors inside a library point at the library
       return this.exec(def.body, sc);
     } finally {
+      this.curFile = savedFile;
       this.depth--;
     }
   }
@@ -316,7 +345,9 @@ export class Interpreter {
     let sc = ctx.scope;
     while (sc && !sc.childInfo) sc = sc.parent;
     if (!sc) return null;
-    const { kids, assigns, scope } = sc.childInfo;
+    const { kids, assigns, scope, file } = sc.childInfo;
+    const savedFile = this.curFile;
+    this.curFile = file;
     const cs = new Scope(scope, ctx.scope);
     for (const a of assigns) cs.vars.set(a.name, this.eval(a.expr, cs));
     const idx = ctx.args.pos[0];
@@ -325,7 +356,9 @@ export class Interpreter {
     else if (isVec(idx)) pick = idx.map(i => kids[i]).filter(Boolean);
     else if (idx instanceof Range) pick = [...idx].map(i => kids[i]).filter(Boolean);
     const out = new Res();
-    for (const k of pick) out.add(this.exec(k, new Scope(cs, cs)));
+    try {
+      for (const k of pick) out.add(this.exec(k, new Scope(cs, cs)));
+    } finally { this.curFile = savedFile; }
     return out;
   }
 

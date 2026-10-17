@@ -1,0 +1,79 @@
+// Hinges.                              use <hinges.kerf>
+//
+//   hinged_box([120, 80, 50], "ply3", lid_h = 20, pin_d = 3);
+//
+// living_hinge() (in the standard library) makes a sheet bendable;
+// bend_length() tells you how long the flexible area needs to be.
+use <boxes.kerf>
+
+// Length of living hinge needed to bend a sheet of thickness t through
+// `angle` degrees around an inside radius r.
+function bend_length(angle, r, t) = PI * (r + t / 2) * angle / 180;
+
+// A round ear with a pin hole at `at`, joined to the straight edge from
+// a to b (two points on the panel's outline). Union it with the panel.
+module pivot_ear(at, r, d, a, b) {
+  difference() {
+    hull() {
+      translate(at) circle(r);
+      polygon([a, b, b + (at - b) * 0.01, a + (at - a) * 0.01]);
+    }
+    translate(at) circle(d = d);
+  }
+}
+
+// Box with a lid that swings open on two pins (dowel, filament, M3 bolt...).
+// The lid is a shallow upside-down box, slightly wider than the body, whose
+// sides hang over the body's sides at the back. Both have ears behind the box
+// with a pin hole; the pivot is `knuckle` mm behind the back and below the
+// rim, which lets the lid open past 90° without hitting anything.
+//   size: body outside [x, y, z]     lid_h: lid height     gap: side clearance
+//   pin_d: hole diameter (make it a touch bigger than the pin)
+//   open: lid angle in degrees, for test-fitting in the 3D view
+// Parts: <name>_bottom/_front/_back/_left/_right, <name>_lid_top/_lid_front/...
+module hinged_box(size, material, lid_h = 20, pin_d = 3.2, knuckle = undef, gap = 0.5, fw = 12, open = 0,
+                  label = "", font = "Liberation Sans:style=Bold", label_size = 12, name = "box") {
+  t = thickness(material);
+  W = size[0]; D = size[1]; H = size[2];
+  R = is_undef(knuckle) ? pin_d + 3 : knuckle;
+  Wl = W + 2 * (t + gap);
+  L = [Wl, D, lid_h];
+
+  // body: the sides own the back corners so the ears have something to hang on
+  module body_side() {
+    fj_panel(D, H, t, [1, 2, 0, 1], fw);
+    difference() {
+      intersection() {
+        translate([D + R, H - R]) circle(R * sqrt(2) - gap);
+        translate([D - 0.01, H - 2 * R - 1]) square([2 * R + 1, 2 * R + 1]);
+      }
+      translate([D + R, H - R]) circle(d = pin_d);
+    }
+  }
+  module lid_side() {
+    fj_panel(D, lid_h, t, [0, 2, 1, 1], fw);
+    pivot_ear([D + R, -R], R, pin_d, [D - 2 * R, 0.5], [D, 0.5]);
+  }
+
+  box_place("bottom", size, t) part(str(name, "_bottom"), material) fj_panel(W, D, t, [2, 2, 2, 2], fw);
+  box_place("front", size, t) part(str(name, "_front"), material) fj_panel(W, H, t, [1, 2, 0, 2], fw);
+  box_place("back", size, t) part(str(name, "_back"), material) fj_panel(W, H, t, [1, 1, 0, 1], fw);
+  box_place("right", size, t) part(str(name, "_right"), material) body_side();
+  box_place("left", size, t) part(str(name, "_left"), material) translate([D, 0]) mirror([1, 0]) body_side();
+
+  translate([0, D + R, H - R]) rotate([-open, 0, 0]) translate([-(t + gap), -(D + R), R]) {
+    box_place("top", L, t) part(str(name, "_lid_top"), material) {
+      fj_panel(Wl, D, t, [2, 2, 2, 2], fw);
+      if (label != "") engrave() translate([Wl / 2, D / 2])
+        text(label, size = label_size, font = font, halign = "center", valign = "center");
+    }
+    box_place("front", L, t) part(str(name, "_lid_front"), material) fj_panel(Wl, lid_h, t, [0, 2, 1, 2], fw);
+    box_place("back", L, t) part(str(name, "_lid_back"), material) fj_panel(Wl, lid_h, t, [0, 1, 1, 1], fw);
+    box_place("right", L, t) part(str(name, "_lid_right"), material) lid_side();
+    box_place("left", L, t) part(str(name, "_lid_left"), material) translate([D, 0]) mirror([1, 0]) lid_side();
+  }
+
+  // the pins (preview only)
+  for (x = [-(t + gap) - 1, W - t - 1])
+    %translate([x, D + R, H - R]) rotate([0, 90, 0]) cylinder(h = 2 * t + gap + 2, d = pin_d - 0.2);
+}

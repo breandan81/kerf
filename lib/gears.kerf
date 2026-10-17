@@ -1,0 +1,90 @@
+// Involute spur gears.            use <gears.kerf>
+//
+// Gears mesh when they share `mod` (tooth size: pitch diameter / teeth) and
+// `pressure_angle`. Every gear has a tooth centred on +x.
+//
+//   gear(20, mod = 2, bore = 5);                       // 20 teeth, 40 mm pitch circle
+//   gear_mesh(20, 12, mod = 2) gear(12, mod = 2);      // a 12-tooth gear meshing with it
+//   d = gear_distance(20, 12, mod = 2);                // centre distance = 32 mm
+//
+// Below about 13 teeth real gears are undercut; these aren't, so very small
+// pinions can bind. Laser-cut gears like a little extra centre distance
+// (0.1–0.2 mm) on top of gear_distance() — try it on a test pair first.
+
+// ---------------------------------------------------------------- sizes
+function gear_pitch_r(teeth, mod = 2) = mod * teeth / 2;      // where the gears roll on each other
+function gear_outer_r(teeth, mod = 2) = mod * (teeth / 2 + 1); // tooth tips
+function gear_root_r(teeth, mod = 2) = mod * (teeth / 2 - 1.25); // bottom of the gaps
+function gear_distance(t1, t2, mod = 2) = mod * (t1 + t2) / 2; // centre distance for meshing
+function gear_ratio(t1, t2) = t2 / t1;                         // turns of gear 1 per turn of gear 2
+
+// Rotation for gear 2 so its teeth fall between gear 1's. Gear 1 sits at the
+// origin turned by a1; gear 2 sits in direction `dir` (degrees) from it.
+// Turning gear 1 by a1 turns gear 2 the other way by a1 * t1 / t2.
+function gear_mesh_angle(t1, t2, a1 = 0, dir = 0) =
+  dir + 180 - 180 / t2 - (a1 - dir) * t1 / t2;
+
+// Place children (gear 2, t2 teeth) meshing with a t1-tooth gear at the
+// origin. Works for flat shapes and for parts. extra = added centre distance.
+module gear_mesh(t1, t2, mod = 2, a1 = 0, dir = 0, extra = 0) {
+  d = gear_distance(t1, t2, mod) + extra;
+  translate([d * cos(dir), d * sin(dir)]) rotate(gear_mesh_angle(t1, t2, a1, dir)) children();
+}
+
+// ---------------------------------------------------------------- shapes
+function _gear_inv(a) = tan(a) - a * PI / 180;  // involute function (radians)
+
+// Spur gear outline, centred on the origin.
+//   backlash: tooth thinning in mm (play between meshing teeth)
+//   bore: centre hole diameter (0 = none), flat: D-flat depth for a motor shaft
+module gear(teeth, mod = 2, pressure_angle = 20, backlash = 0.1, bore = 0, flat = 0, steps = 8) {
+  z = teeth;
+  rp = mod * z / 2;
+  rb = rp * cos(pressure_angle);
+  ro = rp + mod;
+  rr = rp - 1.25 * mod;
+  r0 = max(rb, rr);
+  half = 90 / z - (backlash / 2) / rp * 180 / PI;  // half tooth angle at the pitch circle
+  invp = _gear_inv(pressure_angle);
+  // [radius, half-angle] up the involute flank
+  flank = [for (i = [0 : steps])
+    let(r = r0 + (ro - r0) * i / steps)
+      [r, max(0, half + (invp - _gear_inv(acos(rb / r))) * 180 / PI)]];
+  h0 = flank[0][1];
+  rin = rr - mod / 4;  // start inside the root circle so teeth overlap it
+  tooth = concat(
+    [[rin * cos(h0), -rin * sin(h0)]],
+    [for (f = flank) [f[0] * cos(f[1]), -f[0] * sin(f[1])]],
+    [for (i = [steps : -1 : 0]) [flank[i][0] * cos(flank[i][1]), flank[i][0] * sin(flank[i][1])]],
+    [[rin * cos(h0), rin * sin(h0)]]);
+  difference() {
+    union() {
+      circle(rr);
+      for (i = [0 : z - 1]) rotate(i * 360 / z) polygon(tooth);
+    }
+    if (bore > 0) difference() {
+      circle(d = bore);
+      if (flat > 0) translate([bore / 2 - flat, -bore]) square([bore, 2 * bore]);
+    }
+  }
+}
+
+// Straight rack along +x starting at x = 0, pitch line on y = 0, teeth up,
+// `base` mm of solid strip under the tooth roots. Place a gear on it with
+// on_rack().
+module rack(teeth, mod = 2, pressure_angle = 20, backlash = 0.1, base = 5) {
+  p = PI * mod;
+  a = mod;            // addendum (above the pitch line)
+  d = 1.25 * mod;     // dedendum (below)
+  s = tan(pressure_angle);
+  w = p / 2 - backlash;  // tooth width on the pitch line
+  translate([0, -d - base]) square([teeth * p, base]);
+  for (i = [0 : teeth - 1]) translate([i * p + p / 2, 0])
+    polygon([[-w / 2 - d * s, -d], [w / 2 + d * s, -d], [w / 2 - a * s, a], [-w / 2 + a * s, a]]);
+}
+
+// Place children (a gear with `teeth` teeth) meshing with a rack, its centre
+// above the rack's k-th gap (x = k * PI * mod). extra = added distance.
+module on_rack(teeth, mod = 2, k = 1, extra = 0) {
+  translate([k * PI * mod, gear_pitch_r(teeth, mod) + extra]) rotate(-90) children();
+}

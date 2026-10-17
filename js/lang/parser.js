@@ -130,7 +130,7 @@ export function parse(src, file = '') {
       const name = expect('id').v;
       const params = paramList();
       const body = statement();
-      return { type: 'moduledef', name, params, body, line };
+      return { type: 'moduledef', name, params, body, line, file };
     }
     if (at('function')) {
       next();

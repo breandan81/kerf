@@ -10,7 +10,8 @@ const clip = await import('../js/geom/clip.js');
 
 const stdlib = fs.readFileSync(new URL('../lib/stdlib.kerf', import.meta.url), 'utf8');
 const font = opentype.loadSync('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf');
-const resources = { missing: new Set(), font: () => font, text: () => null, image: () => null, svg: () => null };
+const libFile = p => { try { return fs.readFileSync(new URL('../lib/' + p, import.meta.url), 'utf8'); } catch { return null; } };
+const resources = { missing: new Set(), font: () => font, text: () => null, lib: libFile, image: () => null, svg: () => null };
 
 function run(src) {
   const it = new Interpreter(resources, { stdlib });
@@ -147,5 +148,45 @@ test('tutorial 8: floor and wall actually meet', () => {
 test('tutorial 9: comb labels', () => {
   const r = run(lesson('09-kerf-and-fit.kerf').replace('part("kerf square"', 'echo(widths); part("kerf square"'));
   assert.equal(r.echo[0].text, '[2.7, 2.8, 2.9, 3, 3.1, 3.2, 3.3]');
+});
+
+test('edge-touching tabs fuse into one piece', () => {
+  const r = run('part("p", thickness=3) { translate([3,3]) square([114,47]); translate([3,0]) finger_tabs(114, 3, odd=true); }');
+  assert.equal(r.parts[0].shape.body.filter(p => clip.area(p) > 0).length, 1);
+  const two = run('square(10); translate([20,0]) square(10);');
+  assert.equal(two.parts[0].shape.body.length, 2);
+});
+test('use<> keeps library variables, nested use works', () => {
+  const r = run('use <hinges.kerf>\nmaterial("ply3", thickness=3);\nhinged_box([120,80,50], "ply3", lid_h=25);\necho(bend_length(90, 2, 3));');
+  assert.equal(r.parts.length, 10);
+  assert.equal(findInterference(r.parts).length, 0);
+});
+test('library boxes do not interfere', () => {
+  for (const top of ['open', 'closed', 'lid']) {
+    const r = run(`use <boxes.kerf>\nmaterial("ply3", thickness=3);\nfinger_box([120,80,60], "ply3", top="${top}");`);
+    assert.equal(findInterference(r.parts).length, 0, top);
+    for (const p of r.parts) assert.equal(p.shape.body.filter(q => clip.area(q) > 0).length, 1, p.name);
+  }
+});
+test('hinged lid opens without collisions', () => {
+  for (const open of [45, 90, 130]) {
+    const r = run(`use <hinges.kerf>\nmaterial("ply3", thickness=3);\nhinged_box([120,80,50], "ply3", lid_h=25, open=${open});`);
+    assert.equal(findInterference(r.parts).length, 0, open);
+  }
+});
+test('gears mesh at gear_distance and collide when too close', () => {
+  const g = (extra, dir = 0, a1 = 0) => run(`use <gears.kerf>\nrotate(${a1}) part("a", thickness=3) gear(24);\ngear_mesh(24, 13, 2, a1=${a1}, dir=${dir}, extra=${extra}) part("b", thickness=3) gear(13);`).parts;
+  assert.equal(findInterference(g(0, 35, 4)).length, 0);
+  assert.equal(findInterference(g(-0.4, 35, 4)).length, 1);
+  assert.equal(run('use <gears.kerf>\necho(gear_distance(20, 12, 1.5));').echo[0].text, '24');
+});
+test('include of a missing file is reported, not fatal', () => {
+  const r = run('include <nope.kerf>\nsquare(5);');
+  assert.equal(r.parts.length, 1);
+});
+test('gears.kerf using <gears.kerf> gets the built-in library, not itself', () => {
+  const res = { ...resources, resolve: p => p, lib: (p, builtinOnly) => (builtinOnly ? libFile(p) : 'use <gears.kerf>\ngear(10);') };
+  const r = new Interpreter(res, { stdlib, file: 'gears.kerf' }).run('use <gears.kerf>\ngear(10);');
+  assert.equal(r.parts.length, 1);
 });
 console.log(`${n} passed`);

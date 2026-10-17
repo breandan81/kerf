@@ -1,0 +1,10 @@
+// Box with a lid on two pins (3 mm dowel, filament or M3 bolts).
+use <hinges.kerf>
+
+material("ply3", thickness = 3, color = "wood", kerf = 0.12, sheet = [400, 300]);
+
+// open = lid angle for test-fitting; try 90 or 120 and check the 3D view
+hinged_box([140, 90, 60], "ply3", lid_h = 25, pin_d = 3.2, label = "KEEPSAKES", open = 0);
+
+// what goes inside (preview only)
+%translate([20, 15, 3]) cube([100, 60, 45]);
