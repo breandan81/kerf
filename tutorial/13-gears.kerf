@@ -1,0 +1,37 @@
+// Lesson 13: gears with gears.kerf
+use <gears.kerf>
+
+material("ply3", thickness = 3, color = "wood", kerf = 0.12, sheet = [400, 300]);
+t = thickness("ply3");
+
+m = 2;          // module: tooth size. Gears that mesh must share it.
+z1 = 24;        // teeth on the drive gear
+z2 = 12;        // teeth on the pinion
+z3 = 18;        // teeth on a third gear
+axle = 5;       // axle (dowel) diameter
+play = 0.15;    // a little extra distance so laser-cut teeth don't bind
+
+d2 = gear_distance(z1, z2, m) + play;   // where the pinion's axle goes
+d3 = gear_distance(z1, z3, m) + play;
+dir3 = 130;                             // direction of the third gear
+p3 = [d3 * cos(dir3), d3 * sin(dir3)];
+echo("pinion axle", d2, "mm away; ratio", gear_ratio(z2, z1));
+
+// Base plate with the axle holes in exactly the right places.
+part("plate", "ply3") difference() {
+  hull() {
+    circle(r = gear_outer_r(z1, m) + 6);
+    translate([d2, 0]) circle(r = gear_outer_r(z2, m) + 6);
+    translate(p3) circle(r = gear_outer_r(z3, m) + 6);
+  }
+  circle(d = axle);
+  translate([d2, 0]) circle(d = axle);
+  translate(p3) circle(d = axle);
+}
+
+a = 0;   // turn the drive gear and watch the others follow
+translate([0, 0, t + 1]) {
+  rotate(a) part("drive", "ply3") gear(z1, mod = m, bore = axle);
+  gear_mesh(z1, z2, m, a1 = a, extra = play) part("pinion", "ply3") gear(z2, mod = m, bore = axle);
+  gear_mesh(z1, z3, m, a1 = a, dir = dir3, extra = play) part("idler", "ply3") gear(z3, mod = m, bore = axle);
+}

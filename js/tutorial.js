@@ -198,11 +198,88 @@ like (snug, or sliding) tells you the <code>gap</code> to use for slots: <code>w
 <code>include</code> also runs the file's code and variables.</p>
 <p><b>Workflow tips:</b> <code>#</code> before a statement highlights it, <code>*</code> switches it off,
 <code>!</code> shows only it. Click a part chip under the view to select it; double-click to jump to its code.</p>
-<p>Next, open <b>box.kerf</b> and <b>sign.kerf</b> from the file menu: they're complete projects to copy from.</p>`,
+<p>The next three lessons use the libraries that come with Kerf: boxes, hinges and gears. <b>box.kerf</b>,
+<b>sign.kerf</b>, <b>hinged-box.kerf</b> and <b>gear-pair.kerf</b> in the file menu are complete projects to copy from.</p>`,
     tasks: [
       'Make the hinge zone wider and the pitch 1.2.',
       'Add the matching <code>tslot_hole</code> part for the bracket.',
       'Start your own project with <b>New</b>.',
+    ],
+  },
+  {
+    file: '11-boxes.kerf',
+    title: 'Parametric boxes',
+    html: `
+<p>Lesson 8 jointed two panels by hand. <code>use &lt;boxes.kerf&gt;</code> does a whole box. It's a library that
+ships with Kerf, written in Kerf, so you can read it in the reference (<b>?</b>).</p>
+<ul>
+<li><code>finger_box(size, "ply3")</code> makes every panel, jointed and placed in 3D, named
+<code>box_bottom</code>, <code>box_front</code>…. <code>size</code> is the outside <code>[x, y, z]</code>.</li>
+<li><code>top = "open"</code>, <code>"closed"</code> or <code>"lid"</code>. A lid is a plate plus a lip that drops
+inside the walls; glue them together.</li>
+<li><code>inside = true</code> treats <code>size</code> as the space inside, which is handy when you're boxing
+something you've measured.</li>
+<li><code>fw</code> is the finger width (default 12), and <code>label</code> engraves the front (or the lid).</li>
+</ul>
+<p>To change one panel, build the box yourself. <code>box_panel(which, size, t)</code> is a panel's flat outline and
+<code>box_place(which, size, t)</code> puts a part where that panel goes, so a <code>difference()</code> can cut a hole
+in just the front. <code>which</code> is <code>"bottom"</code>, <code>"top"</code>, <code>"front"</code>,
+<code>"back"</code>, <code>"left"</code> or <code>"right"</code>.</p>
+<p>Change <code>t</code> or any size and every finger follows. That's the point of doing it in code.</p>`,
+    tasks: [
+      'Change <code>size</code> to <code>[160, 90, 40]</code>. Both boxes update; the fit check stays green.',
+      'Try <code>top = "closed"</code> and <code>top = "open"</code> on the first box.',
+      'Make the first box <code>inside = true</code> and add a <code>%cube</code> of what goes in it.',
+      'Engrave your name on the second box\'s left side (add an <code>engrave()</code> to its part).',
+    ],
+  },
+  {
+    file: '12-hinges.kerf',
+    title: 'Hinges',
+    html: `
+<p><code>use &lt;hinges.kerf&gt;</code> gives you two ways to make things move.</p>
+<p><b>A pinned lid.</b> <code>hinged_box(size, "ply3", lid_h, pin_d)</code> is a box whose lid is a shallow
+upside-down box, a little wider than the body. Ears on both sets of sides overlap behind the box, and a pin
+(3 mm dowel, filament or an M3 bolt) goes through each pair. The pivot sits behind and below the rim, so the lid
+opens past 90° without hitting the back.</p>
+<ul>
+<li><code>open</code> swings the lid in the 3D view. Use it to check the lid clears whatever is inside.</li>
+<li><code>pin_d</code> is the hole size; make it a touch bigger than the pin. <code>gap</code> is the clearance
+between lid and body sides.</li>
+</ul>
+<p><b>A living hinge.</b> <code>living_hinge(w, h)</code> (lesson 10) makes plywood bend.
+<code>bend_length(angle, r, t)</code> tells you how wide the cut zone needs to be to bend <code>angle</code>
+degrees around an inside radius <code>r</code>. The echo shows it.</p>`,
+    tasks: [
+      'Set <code>open = 110</code> and orbit round the back to watch the ears.',
+      'Make the lid taller (<code>lid_h = 35</code>) and check it still opens cleanly.',
+      'Change the living hinge to bend 180° and see how much wider the zone gets.',
+      'Put a <code>%cube</code> inside the box and find the largest <code>open</code> angle that clears it.',
+    ],
+  },
+  {
+    file: '13-gears.kerf',
+    title: 'Gears',
+    html: `
+<p><code>use &lt;gears.kerf&gt;</code> makes involute spur gears, the standard tooth shape, which rolls smoothly.</p>
+<ul>
+<li><code>gear(teeth, mod, bore)</code>: <code>mod</code> (the module) sets the tooth size; the pitch diameter is
+<code>teeth × mod</code>. Gears that mesh must share it.</li>
+<li><code>gear_distance(z1, z2, mod)</code> is the centre distance for two gears to mesh. That's where the axle
+holes go. Laser-cut gears like 0.1–0.2 mm extra (<code>play</code>).</li>
+<li><code>gear_mesh(z1, z2, mod, a1, dir, extra)</code> places its child (the second gear) at that distance, in
+direction <code>dir</code>, and rotates it so the teeth interleave. <code>a1</code> is how far the first gear is
+turned; the second turns the other way by <code>a1 × z1 / z2</code>.</li>
+<li><code>gear_outer_r</code>, <code>gear_root_r</code>, <code>gear_pitch_r</code> and <code>gear_ratio</code> help
+size things around the gears, like the base plate here.</li>
+</ul>
+<p>The fit check is a good gear tester. If the teeth overlap, it says so. Try making <code>play</code> negative.</p>
+<p>Below about 13 teeth, small pinions can bind. Cut a test pair before a whole gearbox.</p>`,
+    tasks: [
+      'Change <code>a</code> to 5, 10, 15… and watch all three gears turn together.',
+      'Set <code>play = -0.4</code> and look at the collision; set it back.',
+      'Change <code>dir3</code> to move the third gear around the drive gear (the plate follows).',
+      'Add a rack: <code>translate([0, -70, 0]) { part("rack", "ply3") rack(12, mod = m); on_rack(z2, m, k = 4) part("on_rack", "ply3") gear(z2, mod = m); }</code>',
     ],
   },
 ];

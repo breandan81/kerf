@@ -1,0 +1,20 @@
+// Lesson 11: parametric boxes with boxes.kerf
+use <boxes.kerf>
+
+material("ply3", thickness = 3, color = "wood", kerf = 0.12, sheet = [400, 300]);
+t = thickness("ply3");
+
+size = [100, 70, 50];   // outside x, y, z in mm
+
+// A whole box in one line: every panel jointed, named and placed.
+finger_box(size, "ply3", top = "lid", label = "BITS");
+
+// The same box built from its pieces, so one panel can have a cable hole.
+translate([0, 110, 0]) {
+  for (w = ["bottom", "back", "left", "right"])
+    box_place(w, size, t) part(str("b2_", w), "ply3") box_panel(w, size, t);
+  box_place("front", size, t) part("b2_front", "ply3") difference() {
+    box_panel("front", size, t);
+    translate([size[0] / 2, size[2] / 2]) circle(d = 20);
+  }
+}

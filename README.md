@@ -31,7 +31,7 @@ tab follows. Kerf then checks that the parts actually fit together before you bu
 - **Sheet layout.** Parts are packed onto sheets of each material, with quantities, spacing and margins.
 - **SVG export, one file per sheet, in mm.** Red stroke = cut, blue = score, black fill = engrave. Holes are
   written before outlines. Kerf compensation is optional and applied per material.
-- **Built-in tutorial.** Ten lessons, from first shapes to a kerf-and-fit test card. A language reference is on
+- **Built-in tutorial.** Thirteen lessons, from first shapes through a kerf-and-fit test card to boxes, hinges and gears. A language reference is on
   **F1**.
 
 ![The hinged box laid out on a sheet](docs/sheets.png)

@@ -1,0 +1,16 @@
+// Lesson 12: hinges with hinges.kerf
+use <hinges.kerf>
+
+material("ply3", thickness = 3, color = "wood", kerf = 0.12, sheet = [400, 300]);
+
+// A box whose lid swings on two 3 mm pins. Change `open` to swing it.
+open = 0;
+hinged_box([120, 80, 50], "ply3", lid_h = 20, pin_d = 3.2, label = "TOOLS", open = open);
+
+// A living hinge sized for the bend you want: 90° around a 15 mm inside radius.
+L = bend_length(90, 15, 3);
+echo("hinge zone length", L);
+translate([0, -80, 0]) part("wrap", "ply3") {
+  square([40 + L + 40, 50]);
+  translate([40, 0]) living_hinge(L, 50);
+}
