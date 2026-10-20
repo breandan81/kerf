@@ -91,6 +91,64 @@ export function roundCorners(pts, r, frag) {
 
 // ------------------------------------------------------------ layout
 
+// Split a run of wall whose flat length is over maxLen into panels that butt
+// together at seams. Seams go on straight stretches, clear of hinge zones and
+// corner joints, as evenly spaced as that allows.
+function splitRun(run, zones, t, fw, margin, maxLen) {
+  const head = run.start === 'corner' ? t / 2 : 0, tail = run.end === 'corner' ? t / 2 : 0;
+  const F = run.len + head + tail;
+  if (!(maxLen > 0) || F <= maxLen + 1e-9) return [run];
+  // prefer seams on straight stretches; a wall that is all bend (a round pot)
+  // gets seams in the bend instead
+  // where a seam may go, in centreline distance u from the run's start
+  const keep = fw / 2 + 1;
+  const bad = [[-Infinity, (run.start === 'corner' ? t : 0) + keep], [run.len - (run.end === 'corner' ? t : 0) - keep, Infinity]];
+  for (const z of zones) {
+    const a = z.a - run.s0, b = z.b - run.s0;
+    if (b > 0 && a < run.len) bad.push([a - margin - keep, b + margin + keep]);
+  }
+  return trySplit(run, F, head, tail, fw, maxLen, bad, true) || trySplit(run, F, head, tail, fw, maxLen, bad.slice(0, 2), false);
+}
+
+// One attempt at placing seams outside the `bad` stretches (a list of [a, b]
+// in centreline distance); null if no spacing works.
+function trySplit(run, F, head, tail, fw, maxLen, bad, strict) {
+  bad = bad.slice().sort((x, y) => x[0] - y[0]);
+  const ok = [];
+  let from = -Infinity;
+  for (const [a, b] of bad) { if (a > from) ok.push([from, a]); from = Math.max(from, b); }
+  ok.push([from, Infinity]);
+  const allowed = ok.map(([a, b]) => [Math.max(a, 0), Math.min(b, run.len)]).filter(([a, b]) => b - a >= 0);
+  const snap = u => {
+    let best = null;
+    for (const [a, b] of allowed) {
+      const v = Math.min(b, Math.max(a, u));
+      if (best === null || Math.abs(v - u) < Math.abs(best - u)) best = v;
+    }
+    return best;
+  };
+  const flatOf = (ua, ub, first, last) => ub - ua + (first ? head : 0) + (last ? tail : 0);
+  for (let k = Math.ceil(F / maxLen); k <= Math.ceil(F / fw); k++) {
+    const us = [0];
+    for (let i = 1; i < k; i++) us.push(snap(i * F / k - head));
+    us.push(run.len);
+    if (us.some(v => v === null)) break;
+    let fits = true;
+    for (let i = 0; i < k && fits; i++) {
+      const w = flatOf(us[i], us[i + 1], i === 0, i === k - 1);
+      if (us[i + 1] - us[i] < 2 * fw || w > maxLen + 1e-9) fits = false;
+    }
+    if (!fits) continue;
+    return us.slice(0, -1).map((u, i) => ({
+      s0: run.s0 + u, len: us[i + 1] - u,
+      start: i === 0 ? run.start : 'seam', end: i === k - 1 ? run.end : 'seam',
+    }));
+  }
+  if (strict) return null;
+  throw new FlexError(`a ${F.toFixed(0)} mm wall can't be split into panels of at most ${maxLen} mm; raise max_len`);
+}
+
+
 // Work out the panels, hinge zones and finger positions for an outline.
 //   t: sheet thickness   o.fw: finger width   o.sag: how far (mm) a rigid
 //   finger may stand off a curve, which sets narrower fingers on tight bends
@@ -163,31 +221,33 @@ export function flexLayout(path, t, o = {}) {
   const K = keep.map(i => C[i]), ks = [...keep.map(i => s[i]), L];
   const kIndex = new Map(keep.map((i, j) => [i, j]));
 
-  // panels: corner to corner, or one closed loop
+  // runs of wall: corner to corner, or one closed loop
   const corners = [];
   for (let i = 0; i < n; i++) if (Math.abs(T[i]) > SHARP) corners.push(i);
-  const pieces = [];
-  if (!corners.length) pieces.push({ i0: 0, i1: K.length, s0: 0, len: L, loop: true });
-  else {
-    for (let k = 0; k < corners.length; k++) {
-      const c0 = corners[k], c1 = k + 1 < corners.length ? corners[k + 1] : n;
-      pieces.push({ i0: kIndex.get(c0), i1: c1 === n ? K.length : kIndex.get(c1), s0: s[c0], len: s[c1] - s[c0], loop: false });
-    }
-  }
+  const runs = corners.length
+    ? corners.map((c0, k) => {
+      const c1 = k + 1 < corners.length ? corners[k + 1] : n;
+      return { s0: s[c0], len: s[c1] - s[c0], start: 'corner', end: 'corner' };
+    })
+    : [{ s0: 0, len: L, start: 'seam', end: 'seam', loop: true }];
+  const pieces = runs.flatMap(run => splitRun(run, zones, t, fw, margin, o.maxLen));
 
   for (const pc of pieces) {
     const Lc = pc.len;
-    const ends = pc.loop ? 0 : t / 2;                  // the panel reaches t/2 past each corner
+    const startC = pc.start === 'corner', endC = pc.end === 'corner';
+    const ends = startC ? t / 2 : 0;                   // the panel reaches t/2 past a corner
     pc.lead = ends;                                    // flat x of the centreline's start
-    pc.flatLen = Lc + 2 * ends;
+    pc.flatLen = Lc + ends + (endC ? t / 2 : 0);
     // flat x range between the corner joints (the joints are t wide)
-    pc.core = [ends + (pc.loop ? 0 : t / 2), ends + Lc - (pc.loop ? 0 : t / 2)];
+    pc.core = [startC ? t : 0, pc.flatLen - (endC ? t : 0)];
     // bends inside this panel, in flat x
     pc.zones = zones
       .map(z => ({ a: Math.max(z.a, pc.s0) - pc.s0 + ends, b: Math.min(z.b, pc.s0 + Lc) - pc.s0 + ends, r: z.r }))
       .filter(z => z.b - z.a > 1e-6);
+    // hinge cuts stay 1 mm clear of a seam edge
+    const h0 = pc.core[0] + (pc.start === 'seam' && !pc.loop ? 1 : 0), h1 = pc.core[1] - (pc.end === 'seam' && !pc.loop ? 1 : 0);
     pc.hinges = pc.zones
-      .map(z => [Math.max(pc.core[0], z.a - margin), Math.min(pc.core[1], z.b + margin)])
+      .map(z => [Math.max(h0, z.a - margin), Math.min(h1, z.b + margin)])
       .filter(([a, b]) => b - a > 0.5);
     // fingers along the edges that meet the plates
     const [fa, fb] = pc.core;
@@ -205,6 +265,8 @@ export function flexLayout(path, t, o = {}) {
       spans.push({ a, b, n: Math.max(1, Math.round((b - a) / w)) });
     }
     let total = spans.reduce((q, sp) => q + sp.n, 0);
+    // a whole loop alternates all the way round; any other panel starts and ends
+    // with a stretch the plate keeps (at a seam, one plate finger spans the joint)
     const want = pc.loop ? (total < 2 ? 2 : total % 2 === 0 ? total : total + 1) : (total % 2 === 1 ? total : total + 1);
     while (total < want) {
       spans.reduce((m, sp) => ((sp.b - sp.a) / sp.n > (m.b - m.a) / m.n ? sp : m)).n++;
@@ -304,15 +366,14 @@ export function flexPanel(lay, index, height, o = {}) {
     body.push(rect(a, b, 0, t));
     if (top) body.push(rect(a, b, height - t, height));
   }
-  if (!pc.loop) {
+  if (pc.start === 'corner' || pc.end === 'corner') {
     // corner joints: the panel ending at a corner keeps the outer fingers
     const m = Math.max(1, Math.floor((y1 - y0) / fw));
     const k = m % 2 === 0 ? Math.max(1, m - 1) : m;
     const h = (y1 - y0) / k;
     for (let i = 0; i < k; i++) {
       const ya = y0 + i * h, yb = ya + h;
-      if (i % 2 === 1) body.push(rect(0, t, ya, yb));
-      else body.push(rect(pc.flatLen - t, pc.flatLen, ya, yb));
+      if (i % 2 === 1) { if (pc.start === 'corner') body.push(rect(0, t, ya, yb)); } else if (pc.end === 'corner') body.push(rect(pc.flatLen - t, pc.flatLen, ya, yb));
     }
   }
   const lines = [];
@@ -341,7 +402,7 @@ export function flexStrips(lay, index, shape) {
   if (!pc) throw new FlexError(`there is no panel ${index}; this outline has ${lay.pieces.length}`);
   const { C, s, n, t } = lay;
   const groups = [];
-  for (let k = pc.i0; k < pc.i1; k++) groups.push({ start: k, end: k + 1 });
+  for (let k = 0; k < n; k++) if (s[k] < pc.s0 + pc.len - 1e-9 && s[k + 1] > pc.s0 + 1e-9) groups.push({ start: k, end: k + 1 });
   const BIG = 1e5;
   const out = [];
   groups.forEach((g, gi) => {

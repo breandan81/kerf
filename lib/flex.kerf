@@ -21,7 +21,12 @@
 //   flex_panel(path, height, t, panel = 0, top = true)   one flat wall panel
 //   flex_bend(path, t, panel = 0) part(...)             show it bent in 3D
 //   flex_count(path, t), flex_lengths(path, t)          number and flat lengths of panels
-// Plates and panels must get the same path, t, fw and sag to line up.
+// Plates and panels must get the same path, t, fw, sag and max_len to line up.
+//
+// max_len: longest flat panel you can cut (your sheet, less its margins).
+// Longer walls are split into panels that butt together on straight
+// stretches; the plates' fingers hold the joint in line.
+//   flex_box(rounded_rect([120, 80], 20), 60, "ply3", max_len = 290);
 //
 // Hinge settings: pitch (line spacing), seg (cut length), bridge (uncut gap),
 // margin (how far the cuts run past each bend). Bigger radius = easier bend.
@@ -32,25 +37,26 @@ function rounded_rect(size, r) =
 
 // Whole box: <name>_bottom, <name>_top (unless top = "open") and the walls
 // <name>_wall (or _wall1, _wall2, … when sharp corners split them), placed in
-// 3D with the bottom on z = 0. height is the outside height.
+// 3D with the bottom on z = 0. height is the outside height. max_len splits
+// walls too long for your sheet (see above).
 module flex_box(path, height, material, top = "closed", lip = 0, fw = 12, sag = 0.1,
-                pitch = 1.5, seg = 18, bridge = 3, margin = 3,
+                pitch = 1.5, seg = 18, bridge = 3, margin = 3, max_len = undef,
                 label = "", font = "Liberation Sans:style=Bold", label_size = 10, name = "flex") {
   t = thickness(material);
-  n = flex_count(path, t, fw = fw, sag = sag, margin = margin);
+  n = flex_count(path, t, fw = fw, sag = sag, margin = margin, max_len = max_len);
   xs = [for (p = path) p[0]];
   ys = [for (p = path) p[1]];
   mid = [(min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2];
-  part(str(name, "_bottom"), material) flex_plate(path, t, lip, fw = fw, sag = sag, margin = margin);
+  part(str(name, "_bottom"), material) flex_plate(path, t, lip, fw = fw, sag = sag, margin = margin, max_len = max_len);
   if (top == "closed")
     translate([0, 0, height - t]) part(str(name, "_top"), material) {
-      flex_plate(path, t, lip, fw = fw, sag = sag, margin = margin);
+      flex_plate(path, t, lip, fw = fw, sag = sag, margin = margin, max_len = max_len);
       if (label != "") engrave() translate(mid)
         text(label, size = label_size, font = font, halign = "center", valign = "center");
     }
   for (i = [0 : n - 1])
-    flex_bend(path, t, i, fw = fw, sag = sag, margin = margin)
+    flex_bend(path, t, i, fw = fw, sag = sag, margin = margin, max_len = max_len)
       part(n == 1 ? str(name, "_wall") : str(name, "_wall", i + 1), material)
-        flex_panel(path, height, t, i, top == "closed", fw = fw, sag = sag, margin = margin,
+        flex_panel(path, height, t, i, top == "closed", fw = fw, sag = sag, margin = margin, max_len = max_len,
                    pitch = pitch, seg = seg, bridge = bridge);
 }

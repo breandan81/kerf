@@ -69,6 +69,7 @@ test('assert + errors carry line numbers', () => {
 
 const { findInterference } = await import('../js/geom/interfere.js');
 const await_flex = await import('../js/geom/flex.js');
+const await_layout = await import('../js/geom/layout.js');
 test('box example parts do not interfere', () => {
   const r = run(fs.readFileSync(new URL('../examples/box.kerf', import.meta.url), 'utf8'));
   const hits = findInterference(r.parts);
@@ -241,6 +242,38 @@ test('flex: bad corners are explained', () => {
   assert.throws(() => run('use <flex.kerf>\nflex_box(rounded_rect([60,40], 1), 40, "x");'), /tighter than the sheet/);
   const warned = run('use <flex.kerf>\nflex_box(rounded_rect([60,40], 3), 40, "x");').warnings;
   assert(warned.some(x => /very tight/.test(x.msg)), JSON.stringify(warned));
+});
+test('flex: max_len splits long walls to fit small sheets', () => {
+  const { layoutParts } = await_layout;
+  const lens = src => JSON.parse(run(src).echo[0].text);
+  // the lesson box: one 356 mm wall becomes two, each under 290
+  const L = lens('use <flex.kerf>\necho(flex_lengths(rounded_rect([120, 80], 20), 3, max_len = 290));');
+  assert.equal(L.length, 2, JSON.stringify(L));
+  assert(L.every(x => x <= 290) && Math.abs(L[0] + L[1] - 356.237) < 0.01, JSON.stringify(L));
+  const shapes = [
+    'rounded_rect([120, 80], 20)',
+    'round_corners([[0,0],[160,0],[160,90],[0,90]], [30,30,0,0])',
+    '[for (a = [0:5:355]) 60 * [cos(a), sin(a)]]',
+    'rounded_rect([200, 150], 25)',
+  ];
+  for (const path of shapes) for (const lip of [0, 4]) {
+    const r = run(`use <flex.kerf>\nmaterial("ply3", 3, sheet = [300, 300]);\nflex_box(${path}, 60, "ply3", lip = ${lip}, max_len = 290);`);
+    assert.equal(r.warnings.length, 0, path + JSON.stringify(r.warnings));
+    const hits = findInterference(r.parts);
+    assert.equal(hits.length, 0, `${path} lip ${lip}: ` + hits.map(h => `${h.a.name}/${h.b.name} ${h.volume.toFixed(2)}`).join(', '));
+    const lay = layoutParts(r.parts);
+    assert.equal(lay.warnings.length, 0, path + ' ' + lay.warnings.join('; '));
+    for (const p of r.parts) assert.equal(p.shape.body.filter(q => clip.area(q) > 0).length, 1, `${path} ${p.name} in one piece`);
+  }
+  // seams never land in a bend: no hinge cut within margin of a panel's seam end
+  const r = run('use <flex.kerf>\nmaterial("ply3", 3);\nflex_box(rounded_rect([200, 150], 25), 60, "ply3", max_len = 290);');
+  for (const p of r.parts.filter(p => /wall/.test(p.name))) {
+    const w = clip.bounds(p.shape.body).x1;
+    for (const l of p.shape.lines) assert(l[0][0] > 3 && l[0][0] < w - 3, p.name + ' ' + l[0][0]);
+  }
+  assert.throws(() => run('use <flex.kerf>\nflex_box([for (a = [0:5:355]) 60 * [cos(a), sin(a)]], 60, "x", max_len = 20);'), /can't be split/);
+  // a round pot has no straight stretch: it still splits (seams in the bend)
+  assert.equal(JSON.parse(run('use <flex.kerf>\necho(flex_lengths([for (a = [0:5:355]) 60 * [cos(a), sin(a)]], 3, max_len = 290));').echo[0].text).length, 2);
 });
 test('include of a missing file is reported, not fatal', () => {
   const r = run('include <nope.kerf>\nsquare(5);');

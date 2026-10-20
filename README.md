@@ -103,13 +103,15 @@ flex_box(rounded_rect([120, 80], 20), 60, "ply3");                  // rounded b
 flex_box(rounded_rect([120, 80], 20), 60, "ply3", lip = 4);         // plates overhang: tabs through slots
 flex_box(round_corners([[0, 0], [100, 0], [100, 70], [0, 70]], [30, 30, 0, 0]), 50, "ply3");  // round front, flat back
 flex_box([for (a = [0 : 5 : 355]) 40 * [cos(a), sin(a)]], 80, "ply3", top = "open");         // a pot
+flex_box(rounded_rect([120, 80], 20), 60, "ply3", max_len = 290);   // walls split to fit 300 mm sheets
 ```
 
 You give the outline of the walls; curves bend (hinge cuts only there) and sharp square corners become
 finger-jointed corners. Positions are measured along the middle of the sheet, whose length doesn't change when it
 bends, so the wall's fingers land in the plates' notches without matching lengths by hand. Fingers get narrower on
 tight curves. The 3D view and the fit check show the wall bent. Build your own with `flex_plate`, `flex_panel` and
-`flex_bend`; `flex_lengths` gives each wall's flat length.
+`flex_bend`; `flex_lengths` gives each wall's flat length. If a wall is longer than your sheet, `max_len` splits
+it into panels that butt together on straight stretches, held in line by the plates' fingers.
 
 ## Using it with the laser
 

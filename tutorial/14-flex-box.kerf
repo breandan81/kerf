@@ -7,24 +7,27 @@ t = thickness("ply3");
 size   = [120, 80];   // outside, seen from above
 radius = 20;          // corner radius (outside)
 height = 60;          // outside height, plates included
+panel_max = 1000;     // longest panel your sheet takes; longer walls split
 
 // The outline of the walls: a rounded rectangle.
 shape = rounded_rect(size, radius);
 
 // A whole box in one line: bottom, top and one wall that wraps round.
-flex_box(shape, height, "ply3", label = "FLEX");
+flex_box(shape, height, "ply3", label = "FLEX", max_len = panel_max);
 
 // How long the wall is when it's flat, for planning the sheet.
-echo(wall_length = flex_lengths(shape, t));
+echo(wall_length = flex_lengths(shape, t, max_len = panel_max));
 
 // The same box from its pieces, with a slot in the lid.
 translate([0, 120, 0]) {
-  part("b2_bottom", "ply3") flex_plate(shape, t);
+  part("b2_bottom", "ply3") flex_plate(shape, t, max_len = panel_max);
   translate([0, 0, height - t]) part("b2_top", "ply3") difference() {
-    flex_plate(shape, t);
+    flex_plate(shape, t, max_len = panel_max);
     translate([size[0] / 2, size[1] / 2]) slot(40, 4);
   }
-  // one panel per stretch between sharp corners (just one here)
-  for (i = [0 : flex_count(shape, t) - 1])
-    flex_bend(shape, t, i) part(str("b2_wall", i + 1), "ply3") flex_panel(shape, height, t, i);
+  // one panel per stretch between sharp corners (just one here), more if
+  // panel_max splits them; every piece gets the same max_len
+  for (i = [0 : flex_count(shape, t, max_len = panel_max) - 1])
+    flex_bend(shape, t, i, max_len = panel_max)
+      part(str("b2_wall", i + 1), "ply3") flex_panel(shape, height, t, i, max_len = panel_max);
 }

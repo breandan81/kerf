@@ -732,10 +732,10 @@ function flexLayout(interp, path, tArg, named, line) {
   if (!isVec(path)) throw interp.err('flex: the first argument must be a path (a list of [x, y] points)', line);
   const t = flexThickness(interp, tArg, line);
   try {
-    const key = JSON.stringify([path, t, named.fw, named.sag, named.margin]);
+    const key = JSON.stringify([path, t, named.fw, named.sag, named.margin, named.max_len]);
     const cache = interp.flexCache || (interp.flexCache = new Map());
     if (cache.has(key)) return cache.get(key);
-    const lay = flex.flexLayout(path.map(p => vec2(p)), t, { fw: num(named.fw, 12), sag: num(named.sag, 0.1), margin: num(named.margin, 3) });
+    const lay = flex.flexLayout(path.map(p => vec2(p)), t, { fw: num(named.fw, 12), sag: num(named.sag, 0.1), margin: num(named.margin, 3), maxLen: num(named.max_len, undefined) });
     // living hinges bend comfortably down to roughly twice the sheet thickness
     if (lay.minR < 2 * t) interp.warn(`flex: a bend of about ${(lay.minR + t / 2).toFixed(1)} mm radius (outside) is very tight for ${t} mm sheet; test-cut a strip first`, line);
     cache.set(key, lay);
