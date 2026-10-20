@@ -1,5 +1,6 @@
 export const HELP = `
-<h2>Kerf language reference</h2>
+<h2>Kerf quick reference</h2>
+<p class="fullref"><a href="docs/reference.html" target="_blank"><b>Full reference →</b></a> every module and function, with all its arguments and defaults (searchable).</p>
 <p class="src">Kerf is free software (AGPL v3; libraries MIT). Source: <a href="https://github.com/breandan81/kerf" target="_blank">github.com/breandan81/kerf</a></p>
 <p>OpenSCAD syntax, flat parts. Draw 2D shapes, wrap them in <code>part()</code> to make a piece of
 material, place parts in 3D with the usual transforms, and Kerf lays them out on sheets for the laser.

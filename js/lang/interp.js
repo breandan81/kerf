@@ -1164,3 +1164,5 @@ const BUILTIN_FUNCS = {
 };
 
 export { Range };
+// for the reference docs' coverage test
+export const BUILTIN_NAMES = { modules: Object.keys(BUILTIN_MODULES), functions: Object.keys(BUILTIN_FUNCS) };

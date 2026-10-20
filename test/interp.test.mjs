@@ -291,4 +291,30 @@ test('gears.kerf using <gears.kerf> gets the built-in library, not itself', () =
   const r = new Interpreter(res, { stdlib, file: 'gears.kerf' }).run('use <gears.kerf>\ngear(10);');
   assert.equal(r.parts.length, 1);
 });
+const { BUILTIN_NAMES } = await import('../js/lang/interp.js');
+const reference = await (await import('../tools/gen_reference.mjs')).build();
+test('reference: every built-in documented, docs up to date, examples run', () => {
+  const listed = reference.BUILTINS.flatMap(g => g.items.map(it => it.name));
+  for (const name of [...BUILTIN_NAMES.modules, ...BUILTIN_NAMES.functions]) assert(listed.includes(name), `built-in ${name} is missing from js/lang/reference.js`);
+  for (const name of listed) assert([...BUILTIN_NAMES.modules, ...BUILTIN_NAMES.functions].includes(name), `reference.js lists ${name}, which isn't a built-in`);
+  assert.deepEqual(reference.missing, []);
+  assert.equal(fs.readFileSync(new URL('../docs/REFERENCE.md', import.meta.url), 'utf8'), reference.md, 'docs out of date: run npm run docs');
+  assert.equal(fs.readFileSync(new URL('../docs/reference.html', import.meta.url), 'utf8'), reference.html, 'docs out of date: run npm run docs');
+  // every example runs (fragments that need surrounding code are marked with …)
+  const examples = [
+    ...reference.libs.flatMap(l => [...l.intro.blocks, ...l.items.flatMap(it => it.blocks)].filter(b => b.type === 'code').map(b => [l.file, b.text])),
+    ...reference.BUILTINS.flatMap(g => g.items.filter(it => it.example).map(it => ['builtin', it.example])),
+  ];
+  let ran = 0;
+  const bad = [];
+  for (const [file, ex] of examples) {
+    if (ex.includes('…') || /^\w+\([^)]*\)\s{2,}\S/m.test(ex)) continue;
+    const pre = 'material("ply3", 3);\nt = 3; w = 40; i = 1; shape = [[0,0],[60,0],[60,40],[0,40]];\n' + (file === 'builtin' || file === 'stdlib.kerf' ? '' : `use <${file}>\n`);
+    const r = run(pre + ex);
+    if (r.warnings.length) bad.push(`${file} example:\n${ex}\n  → ${r.warnings.map(w => w.msg).join('; ')}`);
+    ran++;
+  }
+  assert.equal(bad.join('\n\n'), '');
+  assert(ran >= 15, `only ${ran} examples ran`);
+});
 console.log(`${n} passed`);

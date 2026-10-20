@@ -9,10 +9,17 @@ use <boxes.kerf>
 
 // Length of living hinge needed to bend a sheet of thickness t through
 // `angle` degrees around an inside radius r.
+//   angle: bend angle in degrees
+//   r: inside radius of the bend
+//   t: sheet thickness
 function bend_length(angle, r, t) = PI * (r + t / 2) * angle / 180;
 
 // A round ear with a pin hole at `at`, joined to the straight edge from
 // a to b (two points on the panel's outline). Union it with the panel.
+//   at: centre of the ear and its hole
+//   r: ear radius
+//   d: pin hole diameter
+//   a, b: ends of the panel edge the ear grows from
 module pivot_ear(at, r, d, a, b) {
   difference() {
     hull() {
@@ -28,9 +35,18 @@ module pivot_ear(at, r, d, a, b) {
 // sides hang over the body's sides at the back. Both have ears behind the box
 // with a pin hole; the pivot is `knuckle` mm behind the back and below the
 // rim, which lets the lid open past 90° without hitting anything.
-//   size: body outside [x, y, z]     lid_h: lid height     gap: side clearance
-//   pin_d: hole diameter (make it a touch bigger than the pin)
+//   size: the body's outside size [x, y, z]
+//   material: material name
+//   lid_h: lid height (outside)
+//   pin_d: pin hole diameter (make it a touch bigger than the pin)
+//   knuckle: how far the pivot is behind the back and below the rim; default pin_d + 3
+//   gap: clearance between the lid's sides and the body's
+//   fw: target finger width
 //   open: lid angle in degrees, for test-fitting in the 3D view
+//   label: text engraved on the lid
+//   font: the label's font
+//   label_size: the label's text size
+//   name: start of every part's name
 // Parts: <name>_bottom/_front/_back/_left/_right, <name>_lid_top/_lid_front/...
 module hinged_box(size, material, lid_h = 20, pin_d = 3.2, knuckle = undef, gap = 0.5, fw = 12, open = 0,
                   label = "", font = "Liberation Sans:style=Bold", label_size = 12, name = "box") {

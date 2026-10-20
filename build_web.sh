@@ -5,6 +5,7 @@ set -e
 cd "$(dirname "$0")"
 rm -rf dist && mkdir -p dist/vendor/codemirror/addon dist/vendor/three/build dist/vendor/three/addons/controls
 cp -r index.html css js lib fonts tutorial examples dist/
+mkdir -p dist/docs && cp docs/reference.html dist/docs/
 cp vendor/clipper.js vendor/opentype.min.js dist/vendor/
 cp -r vendor/codemirror/lib dist/vendor/codemirror/
 for a in mode edit comment dialog search; do cp -r vendor/codemirror/addon/$a dist/vendor/codemirror/addon/; done

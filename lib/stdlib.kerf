@@ -4,6 +4,10 @@
 
 // ---------------------------------------------------------------- shapes
 
+// A rectangle with rounded corners.
+//   size: a number (square) or [w, h]
+//   r: corner radius (reduced if it's too big for the size)
+//   center: true centres it on the origin; false puts its corner there
 module rounded_square(size, r = 2, center = false) {
   s = is_num(size) ? [size, size] : size;
   rr = min(r, min(s) / 2 - 0.001);
@@ -12,12 +16,16 @@ module rounded_square(size, r = 2, center = false) {
     else hull() for (x = [rr, s[0] - rr], y = [rr, s[1] - rr]) translate([x, y]) circle(rr);
 }
 
-// regular polygon with n sides, circumradius r
+// A regular polygon centred on the origin, with a corner on +x.
+//   n: number of sides
+//   r: circumradius (centre to corner)
 module ngon(n, r) {
   polygon([for (i = [0 : n - 1]) [r * cos(360 * i / n), r * sin(360 * i / n)]]);
 }
 
-// rectangular slot with round ends, centred, length along x
+// A slot with round ends, centred on the origin, running along x.
+//   len: overall length, round ends included
+//   w: width (the ends' diameter)
 module slot(len, w) {
   hull() for (x = [-(len - w) / 2, (len - w) / 2]) translate([x, 0]) circle(d = w);
 }
@@ -25,12 +33,19 @@ module slot(len, w) {
 // ---------------------------------------------------------------- joints
 
 // Odd number of fingers that fit `len` with fingers about `w` wide.
+//   len: edge length
+//   w: target finger width
 function finger_count(len, w = 10) =
   let(n = max(1, floor(len / w))) (n % 2 == 0) ? max(1, n - 1) : n;
 
 // Tabs along the x axis from 0..len, t deep (y = 0..t). The edge is split
-// into n segments; odd = true keeps segments 1,3,5..., false keeps 0,2,4...
-// Two mating edges use the same len/n and opposite `odd`.
+// into n segments and every other one is kept. Two mating edges use the
+// same len and n and opposite `odd`.
+//   len: edge length
+//   t: tab depth (the thickness of the mating sheet)
+//   n: number of segments; default finger_count(len, w)
+//   odd: true keeps segments 1, 3, 5…; false keeps 0, 2, 4…
+//   w: target finger width, when n isn't given
 module finger_tabs(len, t, n = undef, odd = true, w = 10) {
   nn = is_undef(n) ? finger_count(len, w) : n;
   sw = len / nn;
@@ -41,25 +56,37 @@ module finger_tabs(len, t, n = undef, odd = true, w = 10) {
 // Slots through a panel for tabs of another panel crossing it (a "tab and
 // slot" joint away from the edge). Slots run along x from 0..len, t wide,
 // centred on y = 0. Use odd/n matching the tabs.
+//   len, n, odd, w: as finger_tabs
+//   t: slot width (the thickness of the sheet with the tabs)
 module finger_slots(len, t, n = undef, odd = true, w = 10) {
   translate([0, -t / 2]) finger_tabs(len, t, n, odd, w);
 }
 
 // T-slot for a captive nut + bolt, cut into an edge. The edge lies on y = 0
 // and the slot goes inward along +y. Subtract it from the panel.
+//   d: bolt diameter (the slot's width)
+//   len: how far the slot goes into the panel (the bolt's length past the other panel)
+//   nut_w: nut width across the flats
+//   nut_t: nut thickness
+//   nut_at: distance from the edge to the nut
 module tslot(d = 3, len = 12, nut_w = 5.5, nut_t = 2.4, nut_at = 6) {
   translate([-d / 2, 0]) square([d, len]);
   translate([-nut_w / 2, nut_at]) square([nut_w, nut_t]);
 }
 
 // Matching bolt hole for a T-slot in the panel it screws through.
+//   d: bolt diameter
 module tslot_hole(d = 3) { circle(d = d); }
 
 // ---------------------------------------------------------------- laser tricks
 
 // Straight-line living hinge: cut lines parallel to y across a w × h area
-// so the sheet bends around an axis parallel to y. pitch = spacing between
-// lines, seg = cut length, bridge = material left between cuts.
+// so the sheet bends around an axis parallel to y. The flex.kerf boxes lay
+// these out for you.
+//   w, h: size of the bendable area (bending happens across w)
+//   pitch: spacing between cut lines; smaller bends more easily
+//   seg: length of each cut
+//   bridge: material left between cuts; smaller bends more easily
 module living_hinge(w, h, pitch = 1.5, seg = 18, bridge = 3) {
   P = seg + bridge;
   cols = floor(w / pitch);
@@ -74,14 +101,23 @@ module living_hinge(w, h, pitch = 1.5, seg = 18, bridge = 3) {
   }
 }
 
-// Grid of holes, handy for vents and speaker grilles
+// A grid of round holes (subtract it), handy for vents and speaker grilles.
+// The first hole is centred on the origin.
+//   cols, rows: number of holes along x and y
+//   pitch: centre-to-centre spacing
+//   d: hole diameter
 module hole_grid(cols, rows, pitch, d) {
   for (i = [0 : cols - 1], j = [0 : rows - 1]) translate([i * pitch, j * pitch]) circle(d = d);
 }
 
 // ---------------------------------------------------------------- 3D placement
-// Stand a flat part up so its local +y becomes world +z.
-//   face_y(t): part faces -y; its thickness occupies y = 0..t
-//   face_x(t): part faces +x; local x runs along world +y; thickness x = 0..t
+
+// Stands a flat part up so its local +y becomes world +z, facing -y. Local x
+// stays world x; its thickness occupies y = 0..t.
+//   t: the part's thickness
 module face_y(t) { translate([0, t, 0]) rotate([90, 0, 0]) children(); }
+
+// Stands a flat part up so its local +y becomes world +z, facing +x. Local x
+// runs along world +y; its thickness occupies x = 0..t.
+//   t: the part's thickness
 module face_x(t) { rotate([90, 0, 90]) children(); }

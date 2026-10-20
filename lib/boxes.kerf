@@ -16,10 +16,17 @@
 //     box_panel("front", size, t);
 //     translate([60, 30]) circle(d = 20);
 //   }
+//
+//   size: the box's outside size [x, y, z]
+//   t: sheet thickness (also the finger depth)
+//   fw: target finger width
+//   top: "open", "closed", or "lid" (a lift-off lid: a plate plus a lip that drops inside the walls; glue the two together)
+//   which: which panel: "bottom", "top", "front", "back", "left" or "right"
 
-// One flat panel w × h with finger-jointed edges. edges = [bottom, right,
-// top, left], each: 0 plain, 1 fingers that fit between the other panel's,
-// 2 fingers that own the corners. Two mating edges: one 1, one 2.
+// One flat panel w × h with finger-jointed edges. Two mating edges: one 1,
+// the other 2.
+//   w, h: panel size
+//   edges: [bottom, right, top, left], each 0 plain, 1 fingers that fit between the other panel's, 2 fingers that own the corners
 module fj_panel(w, h, t, edges = [1, 2, 0, 2], fw = 12) {
   e = edges;
   x0 = e[3] ? t : 0;
@@ -35,9 +42,9 @@ module fj_panel(w, h, t, edges = [1, 2, 0, 2], fw = 12) {
     if (e[c[0]] == 2 && e[c[1]] == 2) translate([c[2], c[3]]) square(t);
 }
 
-// The 2D outline of one panel of a standard box: "bottom", "top", "front",
-// "back", "left", "right". top = "open" | "closed" | "lid" (lid = open walls).
-// Front/back own the vertical corners; bottom/top own their corners.
+// The 2D outline of one panel of a standard box (top = "lid" gives the walls
+// of an open box). Front/back own the vertical corners; bottom/top own their
+// corners.
 module box_panel(which, size, t, top = "open", fw = 12) {
   W = size[0]; D = size[1]; H = size[2];
   tj = top == "closed" ? 1 : 0;
@@ -60,14 +67,21 @@ module box_place(which, size, t) {
   else if (which == "left") translate([t, D, 0]) rotate([90, 0, -90]) children();
 }
 
-// outside size from an inside size
+// Outside size of a box from its inside size.
+//   size: the inside size [x, y, z]
 function box_outside(size, t, top = "open") =
   [size[0] + 2 * t, size[1] + 2 * t, size[2] + (top == "closed" ? 2 : 1) * t];
 
-// A whole box as parts named <name>_bottom, <name>_front, ...
-//   top: "open", "closed", or "lid" (a lift-off lid: a plate plus a lip that
-//   drops inside the walls; glue the two together)
-//   gap: clearance around the lid lip   label: engraved on the front (or lid)
+// A whole box as parts named <name>_bottom, <name>_front, ..., placed in 3D
+// with the outside corner at the origin.
+//   size: outside size [x, y, z] (inside size with inside = true)
+//   material: material name
+//   inside: true = size is the inside
+//   gap: clearance around the lid lip
+//   label: text engraved on the front (or on the top / lid)
+//   font: the label's font
+//   label_size: the label's text size
+//   name: start of every part's name
 module finger_box(size, material, top = "open", inside = false, fw = 12, gap = 0.3,
                   label = "", font = "Liberation Sans:style=Bold", label_size = 10, name = "box") {
   t = thickness(material);

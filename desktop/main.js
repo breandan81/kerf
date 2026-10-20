@@ -124,8 +124,12 @@ function createWindow() {
     });
     if (choice === 0) e.preventDefault();
   });
-  // links in the help open in the real browser
-  win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
+  // links in the help open in the real browser; the bundled reference opens in its own window
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('app://')) return { action: 'allow', overrideBrowserWindowOptions: { width: 1100, height: 900, autoHideMenuBar: true } };
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
   win.loadURL('app://kerf/index.html');
 }
 

@@ -21,7 +21,7 @@
 //   flex_panel(path, height, t, panel = 0, top = true)   one flat wall panel
 //   flex_bend(path, t, panel = 0) part(...)             show it bent in 3D
 //   flex_count(path, t), flex_lengths(path, t)          number and flat lengths of panels
-// Plates and panels must get the same path, t, fw, sag and max_len to line up.
+// Plates and panels must get the same path, t, fw, sag, margin and max_len to line up.
 //
 // max_len: longest flat panel you can cut. flex_box uses the material's sheet
 // (material(..., sheet = [w, h]) less its margins) unless you give one.
@@ -31,8 +31,12 @@
 //
 // Hinge settings: pitch (line spacing), seg (cut length), bridge (uncut gap),
 // margin (how far the cuts run past each bend). Bigger radius = easier bend.
+// The full list of arguments is under flex_box.
 
-// a w × d rectangle with corner radius r, corner at the origin
+// A rounded-rectangle path with its corner at the origin, to use as a box's
+// outline.
+//   size: [w, d] outside size
+//   r: corner radius: one for all corners, or [r1, r2, r3, r4] counter-clockwise from the origin (0 = sharp)
 function rounded_rect(size, r) =
   round_corners([[0, 0], [size[0], 0], [size[0], size[1]], [0, size[1]]], r);
 
@@ -40,6 +44,24 @@ function rounded_rect(size, r) =
 // <name>_wall (or _wall1, _wall2, … when sharp corners split them), placed in
 // 3D with the bottom on z = 0. height is the outside height. Walls too long
 // for the material's sheet are split (see max_len above).
+//   path: outside of the walls seen from above, a closed list of [x, y] points
+//   height: outside height, plates included
+//   material: material name
+//   top: "closed" or "open"
+//   lip: how far the plates overhang the walls, in mm. 0 = flush (fingers in notches);
+//        more = fingers poke through slots as tabs
+//   fw: target finger width on straight stretches
+//   sag: how far a straight finger may stand off a curve, in mm: sets the finger
+//        width on curves, √(8 × radius × sag)
+//   pitch: spacing between hinge cut lines; smaller bends more easily
+//   seg: length of each hinge cut
+//   bridge: uncut gap between hinge cuts; smaller bends more easily
+//   margin: how far the hinge cuts run past each bend
+//   max_len: longest flat panel; default: the sheet's longer side less its margins
+//   label: text engraved on the top
+//   font: the label's font
+//   label_size: the label's text size
+//   name: start of every part's name
 module flex_box(path, height, material, top = "closed", lip = 0, fw = 12, sag = 0.1,
                 pitch = 1.5, seg = 18, bridge = 3, margin = 3, max_len = undef,
                 label = "", font = "Liberation Sans:style=Bold", label_size = 10, name = "flex") {

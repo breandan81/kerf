@@ -54,6 +54,9 @@ translate([0, 0, 60]) part("shelf", "ply3") square([120, 80]);   // place a part
 %translate([10, 10, t]) cube([100, 60, 40]);                     // reference object, never cut
 ```
 
+**[Full language reference](docs/REFERENCE.md)**: every built-in and library module and function, with all
+its arguments and defaults. It's generated from the source, and is also in the app (**?** → *Full reference*).
+
 ## Libraries
 
 The standard library loads automatically. It has `rounded_square`, `ngon`, `slot`, finger joints
@@ -212,7 +215,12 @@ that reads and writes your project folder and finds system fonts with `fc-match`
 ```
 npm install     # dev dependencies for tests (clipper-lib, opentype.js, puppeteer-core)
 npm test        # language, geometry, joints, libraries (box fit, hinge swing, gear mesh, flex boxes), layout, export
+npm run docs    # regenerate docs/REFERENCE.md + docs/reference.html (npm test fails if they're stale)
 ```
+
+The reference comes from the comment above each module or function in `lib/*.kerf` (one
+`//   name: what it is` line per argument) and from `js/lang/reference.js` for the built-ins. `npm test`
+fails if anything is undocumented or a documented example doesn't run.
 
 The headless UI tests in `test/` (`smoke`, `ui`, `tutorial`, `files`, `hosted`, `desktop`) drive Chrome or the
 AppImage and need `KERF_URL` or a built app; each file's header shows how to run it.

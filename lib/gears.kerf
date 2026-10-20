@@ -11,6 +11,15 @@
 // Below about 13 teeth real gears are undercut; these aren't, so very small
 // pinions can bind. Laser-cut gears like a little extra centre distance
 // (0.1–0.2 mm) on top of gear_distance() — try it on a test pair first.
+//
+//   teeth: number of teeth
+//   mod: module, the tooth size: pitch diameter ÷ teeth. Meshing gears share it
+//   pressure_angle: tooth flank angle in degrees. Meshing gears share it
+//   backlash: tooth thinning in mm, the play between meshing teeth
+//   t1, t2: tooth counts: t1 of gear 1 (at the origin), t2 of gear 2
+//   a1: how far gear 1 is turned, in degrees
+//   dir: direction from gear 1 to gear 2, in degrees
+//   extra: added centre distance in mm
 
 // ---------------------------------------------------------------- sizes
 function gear_pitch_r(teeth, mod = 2) = mod * teeth / 2;      // where the gears roll on each other
@@ -36,8 +45,9 @@ module gear_mesh(t1, t2, mod = 2, a1 = 0, dir = 0, extra = 0) {
 function _gear_inv(a) = tan(a) - a * PI / 180;  // involute function (radians)
 
 // Spur gear outline, centred on the origin.
-//   backlash: tooth thinning in mm (play between meshing teeth)
-//   bore: centre hole diameter (0 = none), flat: D-flat depth for a motor shaft
+//   bore: centre hole diameter (0 = none)
+//   flat: depth of a D-flat in the bore, for a motor shaft (0 = round)
+//   steps: points along each tooth flank (smoothness)
 module gear(teeth, mod = 2, pressure_angle = 20, backlash = 0.1, bore = 0, flat = 0, steps = 8) {
   z = teeth;
   rp = mod * z / 2;
@@ -73,6 +83,7 @@ module gear(teeth, mod = 2, pressure_angle = 20, backlash = 0.1, bore = 0, flat 
 // Straight rack along +x starting at x = 0, pitch line on y = 0, teeth up,
 // `base` mm of solid strip under the tooth roots. Place a gear on it with
 // on_rack().
+//   base: depth of solid strip under the teeth, in mm
 module rack(teeth, mod = 2, pressure_angle = 20, backlash = 0.1, base = 5) {
   p = PI * mod;
   a = mod;            // addendum (above the pitch line)
@@ -85,7 +96,9 @@ module rack(teeth, mod = 2, pressure_angle = 20, backlash = 0.1, base = 5) {
 }
 
 // Place children (a gear with `teeth` teeth) meshing with a rack, its centre
-// above the rack's k-th gap (x = k * PI * mod). extra = added distance.
+// above the rack's k-th gap.
+//   teeth: the gear's tooth count
+//   k: which gap of the rack the gear sits over (x = k × π × mod)
 module on_rack(teeth, mod = 2, k = 1, extra = 0) {
   translate([k * PI * mod, gear_pitch_r(teeth, mod) + extra]) rotate(-90) children();
 }

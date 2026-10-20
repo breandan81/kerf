@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node test/interp.test.mjs"
+    "test": "node test/interp.test.mjs",
+    "docs": "node tools/gen_reference.mjs"
   },
   "keywords": [],
   "author": "",
