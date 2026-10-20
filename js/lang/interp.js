@@ -12,6 +12,7 @@ import {
   I4, mul4, translate4, scale4, rotXYZ, rotAxis, mirror4, to2D,
 } from '../geom/mat4.js';
 import { textPaths } from '../geom/text.js';
+import * as flex from '../geom/flex.js';
 
 class Res {
   constructor() {
@@ -721,6 +722,36 @@ function circlePath(r, n) {
   return p;
 }
 
+// ---- flex walls: shared argument handling for flex_* (see geom/flex.js)
+function flexThickness(interp, v, line) {
+  if (isNum(v)) return v;
+  if (typeof v === 'string' || (v && v.isMaterial)) return interp.material(v, line).thickness;
+  throw interp.err('flex: give a thickness in mm or a material name', line);
+}
+function flexLayout(interp, path, tArg, named, line) {
+  if (!isVec(path)) throw interp.err('flex: the first argument must be a path (a list of [x, y] points)', line);
+  const t = flexThickness(interp, tArg, line);
+  try {
+    const key = JSON.stringify([path, t, named.fw, named.sag, named.margin]);
+    const cache = interp.flexCache || (interp.flexCache = new Map());
+    if (cache.has(key)) return cache.get(key);
+    const lay = flex.flexLayout(path.map(p => vec2(p)), t, { fw: num(named.fw, 12), sag: num(named.sag, 0.1), margin: num(named.margin, 3) });
+    // living hinges bend comfortably down to roughly twice the sheet thickness
+    if (lay.minR < 2 * t) interp.warn(`flex: a bend of about ${(lay.minR + t / 2).toFixed(1)} mm radius (outside) is very tight for ${t} mm sheet; test-cut a strip first`, line);
+    cache.set(key, lay);
+    return lay;
+  } catch (e) {
+    if (e instanceof flex.FlexError) throw interp.err('flex: ' + e.message, line);
+    throw e;
+  }
+}
+function flexCall(interp, line, f) {
+  try { return f(); } catch (e) {
+    if (e instanceof flex.FlexError) throw interp.err('flex: ' + e.message, line);
+    throw e;
+  }
+}
+
 const BUILTIN_MODULES = {
   // ---- 2D primitives
   square(ctx) {
@@ -994,6 +1025,42 @@ const BUILTIN_MODULES = {
     return out;
   },
 
+  // flex_plate(path, t, lip=0) — bottom/top plate for flex walls around `path`
+  flex_plate(ctx) {
+    const n = ctx.args.named;
+    const lay = flexLayout(ctx.interp, arg(ctx, 0, 'path', undefined), arg(ctx, 1, 't', undefined), n, ctx.line);
+    const lip = num(arg(ctx, 2, 'lip', 0), 0);
+    return Res.of(new Shape({ body: flexCall(ctx.interp, ctx.line, () => flex.flexPlate(lay, lip)) }));
+  },
+  // flex_panel(path, height, t, panel=0, top=true) — one flat wall panel with
+  // its fingers and living hinge cuts
+  flex_panel(ctx) {
+    const n = ctx.args.named;
+    const lay = flexLayout(ctx.interp, arg(ctx, 0, 'path', undefined), arg(ctx, 2, 't', undefined), n, ctx.line);
+    const h = num(arg(ctx, 1, 'height', undefined), NaN);
+    if (!(h > 0)) throw ctx.interp.err('flex_panel: height must be a positive number', ctx.line);
+    const o = {
+      top: truthy(arg(ctx, 4, 'top', true)), fw: num(n.fw, 12),
+      pitch: num(n.pitch, 1.5), seg: num(n.seg, 18), bridge: num(n.bridge, 3),
+    };
+    const panel = flexCall(ctx.interp, ctx.line, () => flex.flexPanel(lay, num(arg(ctx, 3, 'panel', 0), 0), h, o));
+    return Res.of(new Shape(panel));
+  },
+  // flex_bend(path, t, panel=0) part(...) — wrap a flat panel part around the
+  // outline (3D view and fit check only; it is still cut flat)
+  flex_bend(ctx) {
+    const n = ctx.args.named;
+    const lay = flexLayout(ctx.interp, arg(ctx, 0, 'path', undefined), arg(ctx, 1, 't', undefined), n, ctx.line);
+    const idx = num(arg(ctx, 2, 'panel', 0), 0);
+    const r = ctx.children();
+    if (r.shapes.length) ctx.interp.warn('flex_bend() bends parts: wrap the panel in part() inside it', ctx.line);
+    r.parts = r.parts.map(p => {
+      if (p.m4.some((v, i) => Math.abs(v - I4[i]) > 1e-9)) ctx.interp.warn(`part("${p.name}") is moved inside flex_bend(); move the flex_bend() instead`, ctx.line);
+      return { ...p, bend: flexCall(ctx.interp, ctx.line, () => flex.flexStrips(lay, idx, p.shape)) };
+    });
+    return r;
+  },
+
   children(ctx) { return ctx.interp.callChildren(ctx); },
   echo(ctx) {
     ctx.interp.echoArgs(ctx.args, ctx.line);
@@ -1069,6 +1136,23 @@ const BUILTIN_FUNCS = {
   is_list({ pos }) { return isVec(pos[0]); },
   is_function({ pos }) { return pos[0] instanceof Closure || !!(pos[0] && pos[0].builtin); },
   version() { return [2026, 10, 0]; },
+  // round_corners(points, r) → closed path with rounded corners (r: one, or one per point)
+  round_corners({ pos, named }, scope, line) {
+    const pts = 'points' in named ? named.points : pos[0];
+    const r = 'r' in named ? named.r : (pos[1] ?? 0);
+    if (!isVec(pts)) { this.warn('round_corners: first argument must be a list of points', line); return undefined; }
+    let res;
+    try { res = flex.roundCorners(pts.map(p => vec2(p)), r, rr => this.fragments(rr, scope)); } catch (e) {
+      if (e instanceof flex.FlexError) throw this.err('round_corners: ' + e.message, line);
+      throw e;
+    }
+    if (res.clamped) this.warn('round_corners: a radius was too big for its edges and was reduced', line);
+    return res.path;
+  },
+  // flex_count(path, t) → how many wall panels the outline needs
+  flex_count({ pos, named }, scope, line) { return flexLayout(this, pos[0], pos[1], named, line).pieces.length; },
+  // flex_lengths(path, t) → flat length of each wall panel
+  flex_lengths({ pos, named }, scope, line) { return flex.flexLengths(flexLayout(this, pos[0], pos[1], named, line)); },
   // thickness("ply3") → material thickness in mm
   thickness({ pos }, scope, line) { return this.material(pos[0], line).thickness; },
   kerf({ pos }, scope, line) { return this.material(pos[0], line).kerf; },

@@ -1,0 +1,30 @@
+// Lesson 14: curved boxes with flex.kerf
+use <flex.kerf>
+
+material("ply3", thickness = 3, color = "wood", kerf = 0.12, sheet = [600, 400]);
+t = thickness("ply3");
+
+size   = [120, 80];   // outside, seen from above
+radius = 20;          // corner radius (outside)
+height = 60;          // outside height, plates included
+
+// The outline of the walls: a rounded rectangle.
+shape = rounded_rect(size, radius);
+
+// A whole box in one line: bottom, top and one wall that wraps round.
+flex_box(shape, height, "ply3", label = "FLEX");
+
+// How long the wall is when it's flat, for planning the sheet.
+echo(wall_length = flex_lengths(shape, t));
+
+// The same box from its pieces, with a slot in the lid.
+translate([0, 120, 0]) {
+  part("b2_bottom", "ply3") flex_plate(shape, t);
+  translate([0, 0, height - t]) part("b2_top", "ply3") difference() {
+    flex_plate(shape, t);
+    translate([size[0] / 2, size[1] / 2]) slot(40, 4);
+  }
+  // one panel per stretch between sharp corners (just one here)
+  for (i = [0 : flex_count(shape, t) - 1])
+    flex_bend(shape, t, i) part(str("b2_wall", i + 1), "ply3") flex_panel(shape, height, t, i);
+}

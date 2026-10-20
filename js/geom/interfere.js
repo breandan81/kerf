@@ -92,21 +92,34 @@ export function solidsAsPrisms(solids) {
 // returns [{a, b, volume, points: [[x,y,z]...]}] for overlapping pairs.
 // refs (from solidsAsPrisms) are checked against parts, not each other.
 export function findInterference(parts, { eps = 0.02, maxStep = 0.5, refs = [] } = {}) {
+  // a bent (flex) panel is checked as its rigid strips; strips of one panel
+  // aren't checked against each other, and hits are reported per panel
+  const owner = [];
+  parts = parts.flatMap(p => (p.bend
+    ? p.bend.map(b => { owner.push(p); return { ...p, shape: b.shape, m4: mul4(p.m4, b.m4) }; })
+    : [(owner.push(p), p)]));
   const n = parts.length;
   parts = parts.concat(refs);
+  for (const r of refs) owner.push(r);
   const boxes = parts.map(worldBox);
   const inv = parts.map(p => invert4(p.m4));
-  const hits = [];
+  const found = new Map();
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < parts.length; j++) {
+      if (owner[i] === owner[j]) continue;
       const A = boxes[i], B = boxes[j];
       if (A.x1 <= B.x0 + eps || B.x1 <= A.x0 + eps || A.y1 <= B.y0 + eps || B.y1 <= A.y0 + eps || A.z1 <= B.z0 + eps || B.z1 <= A.z0 + eps) continue;
       // exact clipping needs no safety margin: touching faces have zero area
       const r = exactOverlap(parts[i], parts[j], inv[j], 0) || pairOverlap(parts[i], parts[j], inv[j], B, eps, maxStep);
-      if (r.volume > 0.05) hits.push({ a: parts[i], b: parts[j], ...r });
+      if (r.volume <= 0) continue;
+      const key = owner[i].id + ':' + (owner[j].ref ? 'ref' + j : owner[j].id);
+      const h = found.get(key) || { a: owner[i], b: owner[j], volume: 0, points: [] };
+      h.volume += r.volume;
+      if (h.points.length < 2000) h.points.push(...r.points);
+      found.set(key, h);
     }
   }
-  return hits;
+  return [...found.values()].filter(h => h.volume > 0.05);
 }
 
 function pairOverlap(pa, pb, invB, boxB, eps, maxStep) {

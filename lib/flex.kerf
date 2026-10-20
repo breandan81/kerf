@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: MIT — free to use in your own designs, see LICENSE-MIT
+// Curved boxes: walls that bend with living hinges and finger-joint into
+// flat bottom and top plates.               use <flex.kerf>
+//
+//   flex_box(rounded_rect([120, 80], 20), 60, "ply3");            // rounded box
+//   flex_box(rounded_rect([120, 80], 20), 60, "ply3", lip = 4);   // plates overhang, tabs through slots
+//   flex_box(round_corners([[0, 0], [100, 0], [100, 70], [0, 70]], [0, 30, 30, 0]),
+//            50, "ply3");                                          // flat back, rounded front
+//   flex_box([for (a = [0 : 5 : 355]) 40 * [cos(a), sin(a)]], 80, "ply3", top = "open"); // a pot
+//
+// path is the OUTSIDE of the walls seen from above: a list of points, closed.
+// Rounded stretches bend; sharp square corners split the walls into separate
+// panels with finger joints. Everything is measured along the middle of the
+// sheet, so the fingers on the walls land in the plates' notches after
+// bending — no lengths to match by hand.
+//
+// The built-in pieces, for your own designs (holes, engraving, other plates):
+//   round_corners(points, r)         path with rounded corners (r per point, 0 = sharp)
+//   flex_plate(path, t, lip = 0)      plate outline with notches (lip = 0, flush)
+//                                     or slots (lip > 0: plate overhangs by lip)
+//   flex_panel(path, height, t, panel = 0, top = true)   one flat wall panel
+//   flex_bend(path, t, panel = 0) part(...)             show it bent in 3D
+//   flex_count(path, t), flex_lengths(path, t)          number and flat lengths of panels
+// Plates and panels must get the same path, t, fw and sag to line up.
+//
+// Hinge settings: pitch (line spacing), seg (cut length), bridge (uncut gap),
+// margin (how far the cuts run past each bend). Bigger radius = easier bend.
+
+// a w × d rectangle with corner radius r, corner at the origin
+function rounded_rect(size, r) =
+  round_corners([[0, 0], [size[0], 0], [size[0], size[1]], [0, size[1]]], r);
+
+// Whole box: <name>_bottom, <name>_top (unless top = "open") and the walls
+// <name>_wall (or _wall1, _wall2, … when sharp corners split them), placed in
+// 3D with the bottom on z = 0. height is the outside height.
+module flex_box(path, height, material, top = "closed", lip = 0, fw = 12, sag = 0.1,
+                pitch = 1.5, seg = 18, bridge = 3, margin = 3,
+                label = "", font = "Liberation Sans:style=Bold", label_size = 10, name = "flex") {
+  t = thickness(material);
+  n = flex_count(path, t, fw = fw, sag = sag, margin = margin);
+  xs = [for (p = path) p[0]];
+  ys = [for (p = path) p[1]];
+  mid = [(min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2];
+  part(str(name, "_bottom"), material) flex_plate(path, t, lip, fw = fw, sag = sag, margin = margin);
+  if (top == "closed")
+    translate([0, 0, height - t]) part(str(name, "_top"), material) {
+      flex_plate(path, t, lip, fw = fw, sag = sag, margin = margin);
+      if (label != "") engrave() translate(mid)
+        text(label, size = label_size, font = font, halign = "center", valign = "center");
+    }
+  for (i = [0 : n - 1])
+    flex_bend(path, t, i, fw = fw, sag = sag, margin = margin)
+      part(n == 1 ? str(name, "_wall") : str(name, "_wall", i + 1), material)
+        flex_panel(path, height, t, i, top == "closed", fw = fw, sag = sag, margin = margin,
+                   pitch = pitch, seg = seg, bridge = bridge);
+}

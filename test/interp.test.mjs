@@ -68,6 +68,7 @@ test('assert + errors carry line numbers', () => {
 });
 
 const { findInterference } = await import('../js/geom/interfere.js');
+const await_flex = await import('../js/geom/flex.js');
 test('box example parts do not interfere', () => {
   const r = run(fs.readFileSync(new URL('../examples/box.kerf', import.meta.url), 'utf8'));
   const hits = findInterference(r.parts);
@@ -179,6 +180,67 @@ test('gears mesh at gear_distance and collide when too close', () => {
   assert.equal(findInterference(g(0, 35, 4)).length, 0);
   assert.equal(findInterference(g(-0.4, 35, 4)).length, 1);
   assert.equal(run('use <gears.kerf>\necho(gear_distance(20, 12, 1.5));').echo[0].text, '24');
+});
+test('round_corners: rounded rectangle', () => {
+  const r = run('p = round_corners([[0,0],[120,0],[120,80],[0,80]], 20, $fn=360); echo(len(p), p[0]);');
+  assert.equal(r.echo[0].text.split(',')[1].trim(), '[60', r.echo[0].text); // starts mid first edge
+  const area = run('part("p", thickness=3) polygon(round_corners([[0,0],[120,0],[120,80],[0,80]], 20, $fn=360));').parts[0];
+  assert(Math.abs(areaOf(area.shape.body) - (120 * 80 - (4 - Math.PI) * 400)) < 0.5, areaOf(area.shape.body));
+  assert(run('x = round_corners([[0,0],[10,0],[10,10],[0,10]], 30);').warnings.length === 1); // radius reduced
+});
+test('flex: panel length follows the centreline', () => {
+  // 120 x 80 outside, r 20, t 3: centreline = straights + circle of radius 18.5
+  const L = run('use <flex.kerf>\necho(flex_lengths(rounded_rect([120,80], 20), 3, $fn=720));').echo[0].text;
+  const want = 2 * 80 + 2 * 40 + 2 * Math.PI * 18.5;
+  assert(Math.abs(JSON.parse(L)[0] - want) < 0.05, L + ' vs ' + want);
+  // flat back: 2 panels; the flat one is 70 + 3 (t/2 past each corner) - 3 (inside both walls)... = 70
+  const r2 = run('use <flex.kerf>\necho(flex_count(round_corners([[0,0],[100,0],[100,70],[0,70]], [0,30,30,0]), 3), flex_lengths(round_corners([[0,0],[100,0],[100,70],[0,70]], [0,30,30,0]), 3)[0]);');
+  assert.equal(r2.echo[0].text, '2, 70');
+});
+test('flex boxes fit together in every style', () => {
+  const shapes = {
+    rounded: 'rounded_rect([120, 80], 20)',
+    'flat back': 'round_corners([[0,0],[100,0],[100,70],[0,70]], [0,30,30,0])',
+    pot: '[for (a = [0:5:355]) 40 * [cos(a), sin(a)]]',
+    square: '[[0,0],[100,0],[100,70],[0,70]]',
+    'inward curve': 'round_corners([[0,0],[100,0],[100,80],[50,50],[0,80]], [15,15,15,30,15])',
+  };
+  for (const [k, path] of Object.entries(shapes)) {
+    for (const opts of ['', ', lip = 4', ', top = "open"']) {
+      const r = run(`use <flex.kerf>\nmaterial("ply3", 3);\nflex_box(${path}, 50, "ply3"${opts});`);
+      assert.equal(r.warnings.length, 0, k + opts + JSON.stringify(r.warnings));
+      const hits = findInterference(r.parts);
+      assert.equal(hits.length, 0, `${k}${opts}: ` + hits.map(h => `${h.a.name}/${h.b.name} ${h.volume.toFixed(2)}`).join(', '));
+      for (const p of r.parts) assert.equal(p.shape.body.filter(q => clip.area(q) > 0).length, 1, `${k}${opts} ${p.name} in one piece`);
+    }
+  }
+});
+test('flex: mismatched plate and panel collide (the check is real)', () => {
+  const r = run('use <flex.kerf>\nmaterial("ply3", 3);\npath = rounded_rect([120, 80], 20);\n' +
+    'part("bottom", "ply3") flex_plate(path, 3, fw = 12);\n' +
+    'flex_bend(path, 3) part("wall", "ply3") flex_panel(path, 50, 3, fw = 20);');
+  assert(findInterference(r.parts).length >= 1);
+});
+test('flex: hinge cuts only where it bends, narrow fingers on curves', () => {
+  const r = run('use <flex.kerf>\nmaterial("ply3", 3);\npart("w", "ply3") flex_panel(round_corners([[0,0],[100,0],[100,70],[0,70]], [0,30,30,0]), 50, 3, 1);');
+  const p = r.parts[0];
+  const xs = p.shape.lines.map(l => l[0][0]);
+  // panel 1 runs from the front-left corner: flat to x = 70 where the 30 mm
+  // bend starts, and the cuts begin `margin` (3 mm) before it
+  assert(Math.abs(Math.min(...xs) - 67) < 0.5, Math.min(...xs));
+  assert(p.shape.lines.length > 100);
+  // fingers: full width on the straight, narrower on the bend
+  const flex = await_flex;
+  const lay = flex.flexLayout(flex.roundCorners([[0, 0], [100, 0], [100, 70], [0, 70]], [0, 30, 30, 0], () => 360).path, 3);
+  const w = lay.pieces[1].intervals.map(([a, b]) => [(a + b) / 2, b - a]);
+  assert(w.filter(([x]) => x < 60).every(([, d]) => d > 10), JSON.stringify(w));
+  assert(w.filter(([x]) => x > 75 && x < 110).every(([, d]) => d < 8), JSON.stringify(w));
+});
+test('flex: bad corners are explained', () => {
+  assert.throws(() => run('use <flex.kerf>\nflex_box([[0,0],[100,0],[50,80]], 40, "x");'), /square outside corners/);
+  assert.throws(() => run('use <flex.kerf>\nflex_box(rounded_rect([60,40], 1), 40, "x");'), /tighter than the sheet/);
+  const warned = run('use <flex.kerf>\nflex_box(rounded_rect([60,40], 3), 40, "x");').warnings;
+  assert(warned.some(x => /very tight/.test(x.msg)), JSON.stringify(warned));
 });
 test('include of a missing file is reported, not fatal', () => {
   const r = run('include <nope.kerf>\nsquare(5);');

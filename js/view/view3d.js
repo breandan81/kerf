@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { toPolygonsWithHoles, bounds } from '../geom/clip.js';
-import { apply4 } from '../geom/mat4.js';
+import { apply4, mul4 } from '../geom/mat4.js';
 
 export class View3D {
   constructor(container, { imageFor, onPick } = {}) {
@@ -104,6 +104,11 @@ export class View3D {
     return c.divideScalar(parts.length);
   }
   partCenter(p) {
+    if (p.bend && p.bend.length) {
+      const c = new THREE.Vector3();
+      for (const st of p.bend) c.add(this.partCenter({ ...p, bend: null, shape: st.shape, m4: mul4(p.m4, st.m4) }));
+      return c.divideScalar(p.bend.length);
+    }
     const b = bounds(p.shape.body.length ? p.shape.body : [[[0, 0]]]);
     return new THREE.Vector3(...apply4(p.m4, [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, p.material.thickness / 2]));
   }
@@ -117,7 +122,6 @@ export class View3D {
   }
 
   partObject(p, ghost, selected) {
-    const t = p.material.thickness;
     const g = new THREE.Group();
     const m = new THREE.Matrix4().set(...p.m4);
     g.matrixAutoUpdate = false;
@@ -128,6 +132,22 @@ export class View3D {
     // wrapper position is used for explode; inner carries the placement
     g.matrixAutoUpdate = true;
 
+    if (p.bend) {
+      // flex panel: each rigid strip in its bent position
+      for (const st of p.bend) {
+        const sg = new THREE.Group();
+        sg.matrixAutoUpdate = false;
+        sg.matrix.copy(new THREE.Matrix4().set(...st.m4));
+        inner.add(sg);
+        this.addFlat(sg, { ...p, shape: st.shape }, ghost, selected);
+      }
+    } else this.addFlat(inner, p, ghost, selected);
+    return g;
+  }
+
+  // a flat part (or one strip of a bent one) extruded into `inner`
+  addFlat(inner, p, ghost, selected) {
+    const t = p.material.thickness;
     const shapes = toPolygonsWithHoles(p.shape.body).map(({ outer, holes }) => {
       const s = new THREE.Shape(outer.map(([x, y]) => new THREE.Vector2(x, y)));
       for (const h of holes) s.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, y))));
@@ -181,7 +201,6 @@ export class View3D {
       plane.matrix.set(a[0], a[2], 0, a[4], a[1], a[3], 0, a[5], 0, 0, 1, top + 0.01, 0, 0, 0, 1);
       inner.add(plane);
     }
-    return g;
   }
 
   fit() {

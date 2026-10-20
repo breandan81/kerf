@@ -198,7 +198,7 @@ like (snug, or sliding) tells you the <code>gap</code> to use for slots: <code>w
 <code>include</code> also runs the file's code and variables.</p>
 <p><b>Workflow tips:</b> <code>#</code> before a statement highlights it, <code>*</code> switches it off,
 <code>!</code> shows only it. Click a part chip under the view to select it; double-click to jump to its code.</p>
-<p>The next three lessons use the libraries that come with Kerf: boxes, hinges and gears. <b>box.kerf</b>,
+<p>The next four lessons use the libraries that come with Kerf: boxes, hinges, gears and curved boxes. <b>box.kerf</b>,
 <b>sign.kerf</b>, <b>hinged-box.kerf</b> and <b>gear-pair.kerf</b> in the file menu are complete projects to copy from.</p>`,
     tasks: [
       'Make the hinge zone wider and the pitch 1.2.',
@@ -280,6 +280,38 @@ size things around the gears, like the base plate here.</li>
       'Set <code>play = -0.4</code> and look at the collision; set it back.',
       'Change <code>dir3</code> to move the third gear around the drive gear (the plate follows).',
       'Add a rack: <code>translate([0, -70, 0]) { part("rack", "ply3") rack(12, mod = m); on_rack(z2, m, k = 4) part("on_rack", "ply3") gear(z2, mod = m); }</code>',
+    ],
+  },
+  {
+    file: '14-flex-box.kerf',
+    title: 'Curved boxes',
+    html: `
+<p><code>use &lt;flex.kerf&gt;</code> makes boxes whose walls bend round curves with a living hinge, and joins
+them to flat bottom and top plates with fingers.</p>
+<p>You draw one thing: the <b>outline of the walls</b> seen from above, as a list of points.
+<code>rounded_rect(size, r)</code> makes a rounded rectangle; <code>round_corners(points, r)</code> rounds any
+polygon, with one radius per corner if you like (0 keeps a corner sharp).</p>
+<ul>
+<li>Rounded stretches <b>bend</b>: the wall gets hinge cuts there and nowhere else.</li>
+<li>Sharp square corners <b>split</b> the wall into separate panels with finger-jointed corners.</li>
+<li>Kerf measures everything along the middle of the sheet, which keeps its length when it bends. The
+fingers on the wall land in the plate's notches after bending, so you never match lengths by hand.
+<code>flex_lengths(path, t)</code> tells you how long each wall is flat.</li>
+<li>On tight curves the fingers get narrower, because a rigid finger can't follow a curve.</li>
+</ul>
+<p><code>flex_box(path, height, "ply3")</code> makes the whole box: <code>top = "open"</code> leaves the top off,
+and <code>lip = 4</code> makes the plates overhang by 4 mm so the fingers become tabs through slots.
+The 3D view shows the wall bent, and the fit check tests it bent.</p>
+<p>For your own changes, build it from the pieces: <code>flex_plate(path, t)</code>, <code>flex_panel(path,
+height, t, i)</code> and <code>flex_bend(path, t, i) part(…)</code>, which bends a flat panel part into place.
+<code>flex_count(path, t)</code> says how many panels there are. Give them all the same path and settings.</p>
+<p>Cut a test strip first: how tightly plywood bends depends on the sheet. Below about twice its thickness,
+Kerf warns you.</p>`,
+    tasks: [
+      'Change <code>radius</code> to 35, then 8. Watch the hinge zones and the fingers on the curves change.',
+      'Give the first box <code>lip = 4</code> and look at the slots in the plates.',
+      'Round only the front: <code>shape = round_corners([[0, 0], [120, 0], [120, 80], [0, 80]], [30, 30, 0, 0]);</code> The flat back becomes its own panel.',
+      'Make a pot: <code>shape = [for (a = [0 : 5 : 355]) 45 * [cos(a), sin(a)]];</code> and <code>top = "open"</code>.',
     ],
   },
 ];

@@ -84,7 +84,7 @@ export class Resources {
       if (!builtinOnly) try { return await (await this.store.read(p)).text(); } catch { /* not in the project */ }
       const r = await fetch('lib/' + path.replace(/^(\.\/)+/, ''));
       if (r.ok && !(r.headers.get('content-type') || '').includes('html')) return r.text();
-      throw new Error(`"${path}" not found in your project or in the built-in libraries (boxes.kerf, hinges.kerf, gears.kerf)`);
+      throw new Error(`"${path}" not found in your project or in the built-in libraries (boxes.kerf, hinges.kerf, gears.kerf, flex.kerf)`);
     });
   }
 

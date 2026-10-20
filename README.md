@@ -31,7 +31,7 @@ tab follows. Kerf then checks that the parts actually fit together before you bu
 - **Sheet layout.** Parts are packed onto sheets of each material, with quantities, spacing and margins.
 - **SVG export, one file per sheet, in mm.** Red stroke = cut, blue = score, black fill = engrave. Holes are
   written before outlines. Kerf compensation is optional and applied per material.
-- **Built-in tutorial.** Thirteen lessons, from first shapes through a kerf-and-fit test card to boxes, hinges and gears. A language reference is on
+- **Built-in tutorial.** Fourteen lessons, from first shapes through a kerf-and-fit test card to boxes, hinges, gears and curved boxes. A language reference is on
   **F1**.
 
 ![The hinged box laid out on a sheet](docs/sheets.png)
@@ -58,7 +58,7 @@ translate([0, 0, 60]) part("shelf", "ply3") square([120, 80]);   // place a part
 
 The standard library loads automatically. It has `rounded_square`, `ngon`, `slot`, finger joints
 (`finger_tabs`, `finger_slots`), captive-nut T-slots, `living_hinge`, `hole_grid`, and `face_x`/`face_y` for
-standing parts up. Three more libraries ship with Kerf. `use` any of them by name; a file in your own project
+standing parts up, plus `round_corners` for rounded paths. Four more libraries ship with Kerf. `use` any of them by name; a file in your own project
 with the same name takes precedence.
 
 **`use <boxes.kerf>`: finger-jointed boxes**
@@ -95,6 +95,21 @@ one), `rack` and `on_rack`. For laser-cut gears, add 0.1–0.2 mm to the centre 
 does that for you.
 
 ![Two meshing gears on a base plate](docs/gears.png)
+
+**`use <flex.kerf>`: curved boxes with living-hinge walls**
+
+```openscad
+flex_box(rounded_rect([120, 80], 20), 60, "ply3");                  // rounded box, one wrap-round wall
+flex_box(rounded_rect([120, 80], 20), 60, "ply3", lip = 4);         // plates overhang: tabs through slots
+flex_box(round_corners([[0, 0], [100, 0], [100, 70], [0, 70]], [30, 30, 0, 0]), 50, "ply3");  // round front, flat back
+flex_box([for (a = [0 : 5 : 355]) 40 * [cos(a), sin(a)]], 80, "ply3", top = "open");         // a pot
+```
+
+You give the outline of the walls; curves bend (hinge cuts only there) and sharp square corners become
+finger-jointed corners. Positions are measured along the middle of the sheet, whose length doesn't change when it
+bends, so the wall's fingers land in the plates' notches without matching lengths by hand. Fingers get narrower on
+tight curves. The 3D view and the fit check show the wall bent. Build your own with `flex_plate`, `flex_panel` and
+`flex_bend`; `flex_lengths` gives each wall's flat length.
 
 ## Using it with the laser
 
@@ -175,8 +190,8 @@ that reads and writes your project folder and finds system fonts with `fc-match`
 |---|---|
 | `js/lang/parser.js` | OpenSCAD-subset lexer and parser |
 | `js/lang/interp.js` | evaluator and built-in modules (shapes, transforms, booleans, `part`, `material`, `engrave`/`score`/`cut`) |
-| `lib/*.kerf` | standard library and the boxes / hinges / gears libraries, written in Kerf |
-| `js/geom/` | Clipper booleans, text (opentype.js), SVG import, MaxRects sheet layout, 3D interference check, SVG export |
+| `lib/*.kerf` | standard library and the boxes / hinges / gears / flex libraries, written in Kerf |
+| `js/geom/` | Clipper booleans, text (opentype.js), SVG import, MaxRects sheet layout, 3D interference check, SVG export, flex walls (`flex.js`) |
 | `js/view/` | three.js assembly view and canvas 2D part/sheet view |
 | `js/storage.js` | where files live: local server, opened files (website), a picked folder, or the desktop app |
 | `desktop/` | Electron shell for the AppImage |
@@ -186,12 +201,15 @@ that reads and writes your project folder and finds system fonts with `fc-match`
   part place it in the assembly; 2D transforms inside it shape it.
 - **Fit check:** the overlap between parallel or perpendicular parts is computed exactly; other pairs are sampled.
   Touching faces don't count as collisions.
+- **Flex walls** are laid out along the centreline of the sheet. A bent panel is still one flat part for cutting;
+  for the 3D view and fit check it is split into rigid strips (at most 3° of bend each), and the plates' notches
+  follow those same strips, so a correct box checks clean.
 
 ## Tests
 
 ```
 npm install     # dev dependencies for tests (clipper-lib, opentype.js, puppeteer-core)
-npm test        # language, geometry, joints, libraries (box fit, hinge swing, gear mesh), layout, export
+npm test        # language, geometry, joints, libraries (box fit, hinge swing, gear mesh, flex boxes), layout, export
 ```
 
 The headless UI tests in `test/` (`smoke`, `ui`, `tutorial`, `files`, `hosted`, `desktop`) drive Chrome or the

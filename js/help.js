@@ -54,6 +54,7 @@ Units are mm. <b>F5</b> render · <b>Ctrl+S</b> save · <b>Ctrl+/</b> comment ·
 <tr><td>finger_slots(len, t, n, odd)</td><td>Slots centred on y=0 for tabs crossing a panel.</td></tr>
 <tr><td>tslot(d=3, len=12, nut_w=5.5, nut_t=2.4) · tslot_hole(d)</td><td>Captive-nut T-slot cut into an edge on y=0.</td></tr>
 <tr><td>living_hinge(w, h, pitch=1.5, seg=18, bridge=3)</td><td>Bendable lattice cut lines.</td></tr>
+<tr><td>round_corners(points, r)</td><td>A closed path (list of points) with its corners rounded: one radius, or one per point (0 keeps that corner sharp). Draw it with <code>polygon()</code>, or give it to the flex functions.</td></tr>
 <tr><td>hole_grid(cols, rows, pitch, d)</td><td></td></tr>
 <tr><td>face_y(t) · face_x(t)</td><td>Stand a part up: facing -y (thickness y=0…t) or facing +x (thickness x=0…t).</td></tr>
 </table>
@@ -77,6 +78,12 @@ looks in its built-in libraries:</p>
 <tr><td>gear_mesh(t1, t2, mod, a1=0, dir=0, extra=0) { gear(t2) }</td><td>Places gear 2 meshing with a t1-tooth gear at the origin (turned a1°), in direction <code>dir</code>, rotated so the teeth interleave.</td></tr>
 <tr><td>gear_pitch_r · gear_outer_r · gear_root_r(teeth, mod) · gear_ratio(t1, t2) · gear_mesh_angle(t1, t2, a1, dir)</td><td></td></tr>
 <tr><td>rack(teeth, mod, base=5) · on_rack(teeth, mod, k) { gear(teeth) }</td><td>Straight rack along +x; on_rack puts a gear on it over the k-th gap.</td></tr>
+<tr><td colspan=2><b>use &lt;flex.kerf&gt;</b> (the flex_ pieces below are built in)</td></tr>
+<tr><td>flex_box(path, height, "ply3", top="closed", lip=0, fw=12, label="")</td><td>A box whose walls follow <code>path</code> (the outside of the walls, seen from above): curves bend with a living hinge, sharp square corners become finger-jointed corners. Bottom on z = 0. <code>top</code>: "closed" or "open"; <code>lip</code> &gt; 0 makes the plates overhang so the fingers become tabs through slots. Hinge settings: <code>pitch, seg, bridge, margin</code>; <code>sag</code> sets how much narrower fingers get on curves.</td></tr>
+<tr><td>rounded_rect([w, d], r)</td><td>Rounded-rectangle path with its corner at the origin.</td></tr>
+<tr><td>flex_plate(path, t, lip=0) · flex_panel(path, height, t, panel=0, top=true)</td><td>A plate's outline (with notches or slots) and one flat wall panel (fingers + hinge cuts), to build a box yourself. Give all the pieces the same path, t and settings.</td></tr>
+<tr><td>flex_bend(path, t, panel=0) part(…)</td><td>Shows a flat panel part bent into place in 3D (and fit-checks it bent). It is still cut flat.</td></tr>
+<tr><td>flex_count(path, t) · flex_lengths(path, t)</td><td>How many wall panels the path needs, and each one's flat length.</td></tr>
 </table>
 
 <h3>Language</h3>
