@@ -229,7 +229,7 @@ test('flex: hinge cuts only where it bends, narrow fingers on curves', () => {
   // panel 1 runs from the front-left corner: flat to x = 70 where the 30 mm
   // bend starts, and the cuts begin `margin` (3 mm) before it
   assert(Math.abs(Math.min(...xs) - 67) < 0.5, Math.min(...xs));
-  assert(p.shape.lines.length > 100);
+  assert(new Set(xs.map(x => x.toFixed(3))).size > 50);   // two 30 mm bends: a column every ~1.5 mm
   // fingers: full width on the straight, narrower on the bend
   const flex = await_flex;
   const lay = flex.flexLayout(flex.roundCorners([[0, 0], [100, 0], [100, 70], [0, 70]], [0, 30, 30, 0], () => 360).path, 3);
@@ -311,6 +311,43 @@ test('flex: flat fingers on curves fit their plate slots and notches', () => {
       tabs++;
     }
     assert(tabs > 10);
+  }
+});
+test('flex: hinge cuts that reach the edge land between fingers', () => {
+  // the wall bends at its edges only between fingers (a finger is solid), so
+  // every gap gets an edge-reaching cut, none runs beside a finger's side,
+  // columns alternate edge / inner, and the pattern fits the height exactly
+  const rc = (p, r) => flexGeom.roundCorners(p, r, () => 360).path;
+  const shapes = [rc([[0, 0], [120, 0], [120, 80], [0, 80]], 20), rc([[0, 0], [120, 0], [120, 80], [0, 80]], 8),
+    rc([[0, 0], [120, 0], [120, 80], [0, 80]], 35), rc([[0, 0], [100, 0], [100, 70], [0, 70]], [0, 30, 30, 0]),
+    Array.from({ length: 72 }, (_, i) => [60 * Math.cos(i * Math.PI / 36), 60 * Math.sin(i * Math.PI / 36)])];
+  for (const path of shapes) for (const [opts, H] of [[{}, 60], [{ maxLen: 200 }, 45], [{ fw: 20 }, 90]]) {
+    const lay = flexGeom.flexLayout(path, 3, opts);
+    for (const top of [true, false]) lay.pieces.forEach((pc, i) => {
+      const y0 = 3, y1 = top ? H - 3 : H;
+      const cols = new Map();
+      for (const l of flexGeom.flexPanel(lay, i, H, { top }).lines) {
+        const x = +l[0][0].toFixed(4);
+        if (!cols.has(x)) cols.set(x, []);
+        cols.get(x).push([l[0][1], l[1][1]]);
+      }
+      const xs = [...cols.keys()].sort((a, b) => a - b);
+      const edge = x => cols.get(x).some(([a]) => Math.abs(a - y0) < 1e-6);
+      for (const x of xs) {
+        const c = cols.get(x).sort((a, b) => a[0] - b[0]);
+        // edge columns reach both edges; inner ones keep a bridge at each
+        if (edge(x)) assert(Math.abs(c[c.length - 1][1] - y1) < 1e-6, 'edge column reaches the far edge too');
+        else assert(c[0][0] > y0 + 2.9 && c[c.length - 1][1] < y1 - 2.9, 'inner column keeps its edge bridges');
+        if (edge(x)) for (const [a, b] of pc.fingers) assert(Math.abs(x - a) >= 0.5 - 1e-6 && Math.abs(x - b) >= 0.5 - 1e-6, `edge cut at ${x} beside finger ${a}..${b}`);
+      }
+      for (let k = 1; k < xs.length; k++) if (xs[k] - xs[k - 1] < 2.5) {
+        assert(edge(xs[k]) !== edge(xs[k - 1]), `columns at ${xs[k - 1]}, ${xs[k]} don't alternate`);
+        assert(xs[k] - xs[k - 1] >= 0.6 * 1.5 - 1e-6, `slat ${xs[k] - xs[k - 1]} mm`);
+      }
+      for (const [ha, hb] of pc.hinges) pc.intervals.forEach(([a, b], k) => {
+        if (k % 2 === 0 && (a + b) / 2 > ha && (a + b) / 2 < hb) assert(xs.some(x => x > a && x < b && edge(x)), `gap ${a}..${b} has no edge cut`);
+      });
+    });
   }
 });
 test('include of a missing file is reported, not fatal', () => {

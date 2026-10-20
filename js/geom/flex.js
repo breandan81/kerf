@@ -332,6 +332,54 @@ export function flexPlate(lay, lip = 0) {
 
 // ------------------------------------------------------------ panel
 
+// Where the hinge cut columns go across ha..hb, and which reach the edges:
+// [[x, edge], …]. The wall can only bend at its edges between fingers (a
+// finger is solid and stays flat), so an edge column goes in the middle of
+// every gap between fingers, and the columns between two gaps are spaced
+// evenly, as close to `pitch` as strict alternation allows (within 25%).
+// Edge columns that land on a finger stop at its root.
+function hingeColumns(pc, ha, hb, pitch) {
+  const anchors = pc.intervals.filter((_, k) => k % 2 === 0)
+    .map(([a, b]) => (a + b) / 2).filter(x => x > ha && x < hb);
+  const cols = [];
+  if (!anchors.length) {
+    for (let c = 0, n = Math.floor((hb - ha) / pitch); c <= n; c++) cols.push([ha + c * pitch, c % 2 === 0]);
+    return cols;
+  }
+  const CLEAR = 0.5;   // edge cuts stay this far from a finger's sides
+  const nearSide = x => pc.fingers.some(([a, b]) => Math.abs(x - a) < CLEAR || Math.abs(x - b) < CLEAR);
+  const step = [];   // spacing used between each pair of anchors
+  for (let i = 0; i + 1 < anchors.length; i++) {
+    const D = anchors[i + 1] - anchors[i];
+    // an even number of columns, spaced close to pitch (finer rather than
+    // coarser: tight bends need it), with no edge column beside a finger
+    let best = null;
+    for (let m = 2; D / m >= 0.6 * pitch || m === 2; m += 2) {
+      const sp = D / m;
+      let cost = sp > pitch ? 1.5 * Math.log(sp / pitch) : Math.log(pitch / sp);
+      for (let k = 2; k < m; k += 2) if (nearSide(anchors[i] + k * sp)) cost += 10;
+      if (!best || cost < best.cost) best = { m, cost };
+    }
+    step.push(D / best.m);
+    for (let k = 0; k < best.m; k++) cols.push([anchors[i] + k * D / best.m, k % 2 === 0]);
+  }
+  cols.push([anchors[anchors.length - 1], true]);
+  // carry on past the first and last gaps to the ends of the hinge zone
+  const p0 = step.length ? step[0] : pitch, p1 = step.length ? step[step.length - 1] : pitch;
+  for (let k = 1; anchors[0] - k * p0 >= ha - 1e-9; k++) cols.unshift([anchors[0] - k * p0, k % 2 === 0]);
+  for (let k = 1; anchors[anchors.length - 1] + k * p1 <= hb + 1e-9; k++) cols.push([anchors[anchors.length - 1] + k * p1, k % 2 === 0]);
+  // an edge cut right beside a finger's side would carry that side on up into
+  // the wall (or leave a sliver). Where the spacing couldn't avoid it (past
+  // the last gap), nudge it clear, whichever way is shorter
+  for (const c of cols) {
+    if (!c[1]) continue;
+    for (const [a, b] of pc.fingers) for (const side of [a, b]) {
+      if (Math.abs(c[0] - side) < CLEAR) c[0] = side + (c[0] < side ? -CLEAR : CLEAR);
+    }
+  }
+  return cols;
+}
+
 // One flat panel. height: outside height of the box (plates included).
 // top: whether a top plate joins its upper edge. Hinge cuts: pitch between
 // lines, seg cut length, bridge left between cuts.
@@ -358,20 +406,23 @@ export function flexPanel(lay, index, height, o = {}) {
       if (i % 2 === 1) { if (pc.start === 'corner') body.push(rect(0, t, ya, yb)); } else if (pc.end === 'corner') body.push(rect(pc.flatLen - t, pc.flatLen, ya, yb));
     }
   }
+  // Hinge cuts come in two kinds of column, strictly alternating: "edge"
+  // columns cut right out to both edges of the wall (n cuts, n - 1 bridges),
+  // "inner" columns keep a bridge at each edge (and one in the middle of each
+  // of the edge column's inner cuts). Cut lengths are stretched so the pattern
+  // fits the height exactly.
+  const H = y1 - y0;
+  const nE = Math.max(2, Math.round((H + bridge) / (seg + bridge)));
+  const L = (H - (nE - 1) * bridge) / nE;
+  const edgeCuts = Array.from({ length: nE }, (_, i) => [y0 + i * (L + bridge), y0 + i * (L + bridge) + L]);
+  const innerBr = [[y0, y0 + bridge], ...edgeCuts.slice(1, -1).map(([a, b]) => [(a + b - bridge) / 2, (a + b + bridge) / 2]), [y1 - bridge, y1]];
+  const innerCuts = innerBr.slice(1).map((br, i) => [innerBr[i][1], br[0]]);
   const lines = [];
   for (const [ha, hb] of pc.hinges) {
-    const P2 = seg + bridge;
-    const cols = Math.floor((hb - ha) / pitch);
-    for (let c = 0; c <= cols; c++) {
-      const x = ha + c * pitch;
-      const off = c % 2 === 0 ? bridge / 2 : bridge / 2 - P2 / 2;
-      for (let k = -1; k <= Math.ceil((y1 - y0) / P2); k++) {
-        const a = Math.max(y0, y0 + off + k * P2), b = Math.min(y1, y0 + off + k * P2 + seg);
-        if (b - a > 0.5) lines.push([[x, a], [x, b]]);
-      }
+    for (const [x, edge] of hingeColumns(pc, ha, hb, pitch)) {
+      for (const [a, b] of edge ? edgeCuts : innerCuts) if (b - a > 0.5) lines.push([[x, a], [x, b]]);
     }
-  }
-  return { body: clip.union(body), lines };
+  }  return { body: clip.union(body), lines };
 }
 
 // ------------------------------------------------------------ bending (3D view)
