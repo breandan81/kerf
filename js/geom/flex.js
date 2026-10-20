@@ -390,8 +390,15 @@ export function flexStrips(lay, index, shape) {
   // fingers have no hinge cuts, so they stay flat: each is its own rigid
   // piece along the chord between its ends, the same rectangle the plates cut
   const top = clip.bounds(shape.body).y1;
+  // fingers along the top edge only if the panel has them (not with an open
+  // top): then the plate's stretch between two fingers is cut away up there
+  const gap = pc.intervals.find((_, k) => k % 2 === 0);
+  const topFingers = !!gap && Math.abs(clip.intersection(shape.body,
+    [[[gap[0] + 0.1, top - t / 2], [gap[1] - 0.1, top - t / 2], [gap[1] - 0.1, top], [gap[0] + 0.1, top]]])
+    .reduce((sum, q) => sum + clip.area(q), 0)) < 1e-6;
   const fingerBoxes = pc.fingers.flatMap(([a, b]) => [
-    [[a, -BIG], [b, -BIG], [b, t], [a, t]], [[a, top - t], [b, top - t], [b, BIG], [a, BIG]]]);
+    [[a, -BIG], [b, -BIG], [b, t], [a, t]],
+    ...(topFingers ? [[[a, top - t], [b, top - t], [b, BIG], [a, BIG]]] : [])]);
   for (const [a, b] of pc.fingers) {
     const box = [[a, -BIG], [b, -BIG], [b, BIG], [a, BIG]];
     const body = clip.intersection(shape.body, clip.intersection([box], fingerBoxes));
