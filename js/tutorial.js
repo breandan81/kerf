@@ -306,9 +306,10 @@ The 3D view shows the wall bent, and the fit check tests it bent.</p>
 height, t, i)</code> and <code>flex_bend(path, t, i) part(…)</code>, which bends a flat panel part into place.
 <code>flex_count(path, t)</code> says how many panels there are. Give them all the same path and settings.</p>
 <p><b>Small sheets.</b> A wall that wraps all the way round is long: this one is 356 mm flat. The sheet size
-comes from <code>material(…, sheet = [w, h])</code>; if a part won't fit, the console says so. Give
-the flex pieces <code>max_len</code> (your sheet less its margins, e.g. 290 for a 300 mm sheet; the lesson's
-<code>panel_max</code>) and long walls split into panels that butt together on straight stretches. The plates' fingers hold the joint in line.</p>
+comes from <code>material(…, sheet = [w, h])</code>, and <code>flex_box</code> splits any wall longer than the
+sheet into panels that butt together on straight stretches. The plates' fingers hold the joint in line.
+<code>max_len = …</code> sets your own limit. Built from the pieces, give every flex call the same
+<code>max_len</code>; <code>sheet_size("ply3")</code> is the sheet's usable area.</p>
 <p>Cut a test strip first: how tightly plywood bends depends on the sheet. Below about twice its thickness,
 Kerf warns you.</p>`,
     tasks: [
@@ -316,7 +317,7 @@ Kerf warns you.</p>`,
       'Give the first box <code>lip = 4</code> and look at the slots in the plates.',
       'Round only the front: <code>shape = round_corners([[0, 0], [120, 0], [120, 80], [0, 80]], [30, 30, 0, 0]);</code> The flat back becomes its own panel.',
       'Make a pot: <code>shape = [for (a = [0 : 5 : 355]) 45 * [cos(a), sin(a)]];</code> and <code>top = "open"</code>.',
-      'Set <code>sheet = [300, 300]</code> in <code>material()</code>: the console says the walls don\'t fit. Now set <code>panel_max = 290</code> and watch each wall split in two.',
+      'Set <code>sheet = [300, 300]</code> in <code>material()</code>: both walls split in two to fit. Open <b>Sheets</b> to see them.',
     ],
   },
 ];

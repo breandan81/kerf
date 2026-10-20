@@ -272,6 +272,13 @@ test('flex: max_len splits long walls to fit small sheets', () => {
     for (const l of p.shape.lines) assert(l[0][0] > 3 && l[0][0] < w - 3, p.name + ' ' + l[0][0]);
   }
   assert.throws(() => run('use <flex.kerf>\nflex_box([for (a = [0:5:355]) 60 * [cos(a), sin(a)]], 60, "x", max_len = 20);'), /can't be split/);
+  // flex_box splits to fit the material's sheet with no max_len given
+  const auto = run('use <flex.kerf>\nmaterial("ply3", 3, sheet = [300, 300]);\nflex_box(rounded_rect([120, 80], 20), 60, "ply3");');
+  assert.deepEqual(auto.parts.map(p => p.name), ['flex_bottom', 'flex_top', 'flex_wall1', 'flex_wall2']);
+  assert.equal(layoutParts(auto.parts).warnings.length, 0);
+  assert.equal(findInterference(auto.parts).length, 0);
+  assert.equal(run('use <flex.kerf>\nmaterial("ply3", 3, sheet = [600, 400]);\nflex_box(rounded_rect([120, 80], 20), 60, "ply3");').parts.length, 3);
+  assert.equal(run('material("m", 3, sheet = [300, 200], margin = 10);\necho(sheet_size("m"));').echo[0].text, '[280, 180]');
   // a round pot has no straight stretch: it still splits (seams in the bend)
   assert.equal(JSON.parse(run('use <flex.kerf>\necho(flex_lengths([for (a = [0:5:355]) 60 * [cos(a), sin(a)]], 3, max_len = 290));').echo[0].text).length, 2);
 });

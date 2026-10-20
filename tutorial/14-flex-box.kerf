@@ -7,13 +7,13 @@ t = thickness("ply3");
 size   = [120, 80];   // outside, seen from above
 radius = 20;          // corner radius (outside)
 height = 60;          // outside height, plates included
-panel_max = 1000;     // longest panel your sheet takes; longer walls split
+panel_max = max(sheet_size("ply3"));  // longest panel the sheet takes
 
 // The outline of the walls: a rounded rectangle.
 shape = rounded_rect(size, radius);
 
 // A whole box in one line: bottom, top and one wall that wraps round.
-flex_box(shape, height, "ply3", label = "FLEX", max_len = panel_max);
+flex_box(shape, height, "ply3", label = "FLEX");   // splits walls to fit the sheet by itself
 
 // How long the wall is when it's flat, for planning the sheet.
 echo(wall_length = flex_lengths(shape, t, max_len = panel_max));

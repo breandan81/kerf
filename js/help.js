@@ -9,6 +9,7 @@ Units are mm. <b>F5</b> render · <b>Ctrl+S</b> save · <b>Ctrl+/</b> comment ·
 <table>
 <tr><td>material("ply3", thickness=3, color="wood", kerf=0.12, sheet=[400,300], margin=5, gap=3)</td><td>Declare a sheet material. <code>kerf</code> is the beam width used for kerf compensation on export; <code>gap</code> is the spacing between parts on the sheet.</td></tr>
 <tr><td>thickness("ply3")</td><td>A material's thickness, e.g. <code>t = thickness("ply3");</code></td></tr>
+<tr><td>sheet_size("ply3")</td><td>Usable area of one sheet, <code>[w, h]</code> less the margins.</td></tr>
 <tr><td>part("name", "ply3", qty=1, color=, center=false) { … }</td><td>One physical piece: the union of its children is cut out. It occupies z = 0…thickness in its own frame (<code>center=true</code>: centred on z = 0). <code>qty</code> cuts extra copies.</td></tr>
 <tr><td>part("name", thickness=6) { … }</td><td>Shortcut: ad-hoc material named "6mm".</td></tr>
 </table>
@@ -79,7 +80,7 @@ looks in its built-in libraries:</p>
 <tr><td>gear_pitch_r · gear_outer_r · gear_root_r(teeth, mod) · gear_ratio(t1, t2) · gear_mesh_angle(t1, t2, a1, dir)</td><td></td></tr>
 <tr><td>rack(teeth, mod, base=5) · on_rack(teeth, mod, k) { gear(teeth) }</td><td>Straight rack along +x; on_rack puts a gear on it over the k-th gap.</td></tr>
 <tr><td colspan=2><b>use &lt;flex.kerf&gt;</b> (the flex_ pieces below are built in)</td></tr>
-<tr><td>flex_box(path, height, "ply3", top="closed", lip=0, fw=12, max_len=undef, label="")</td><td>A box whose walls follow <code>path</code> (the outside of the walls, seen from above): curves bend with a living hinge, sharp square corners become finger-jointed corners. Bottom on z = 0. <code>top</code>: "closed" or "open"; <code>lip</code> &gt; 0 makes the plates overhang so the fingers become tabs through slots. Hinge settings: <code>pitch, seg, bridge, margin</code>; <code>sag</code> sets how much narrower fingers get on curves. <code>max_len</code>: the longest panel your sheet takes (sheet minus margins); longer walls split into panels that butt together on straight stretches.</td></tr>
+<tr><td>flex_box(path, height, "ply3", top="closed", lip=0, fw=12, max_len=undef, label="")</td><td>A box whose walls follow <code>path</code> (the outside of the walls, seen from above): curves bend with a living hinge, sharp square corners become finger-jointed corners. Bottom on z = 0. <code>top</code>: "closed" or "open"; <code>lip</code> &gt; 0 makes the plates overhang so the fingers become tabs through slots. Hinge settings: <code>pitch, seg, bridge, margin</code>; <code>sag</code> sets how much narrower fingers get on curves. Walls longer than the material's sheet split into panels that butt together on straight stretches; <code>max_len</code> sets your own limit.</td></tr>
 <tr><td>rounded_rect([w, d], r)</td><td>Rounded-rectangle path with its corner at the origin.</td></tr>
 <tr><td>flex_plate(path, t, lip=0) · flex_panel(path, height, t, panel=0, top=true)</td><td>A plate's outline (with notches or slots) and one flat wall panel (fingers + hinge cuts), to build a box yourself. Give all the pieces the same path, t and settings.</td></tr>
 <tr><td>flex_bend(path, t, panel=0) part(…)</td><td>Shows a flat panel part bent into place in 3D (and fit-checks it bent). It is still cut flat.</td></tr>

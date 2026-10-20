@@ -1156,6 +1156,11 @@ const BUILTIN_FUNCS = {
   // thickness("ply3") → material thickness in mm
   thickness({ pos }, scope, line) { return this.material(pos[0], line).thickness; },
   kerf({ pos }, scope, line) { return this.material(pos[0], line).kerf; },
+  // sheet_size("ply3") → the usable area of one sheet, [w, h] less the margins
+  sheet_size({ pos }, scope, line) {
+    const m = this.material(pos[0], line);
+    return [m.sheet[0] - 2 * m.margin, m.sheet[1] - 2 * m.margin];
+  },
 };
 
 export { Range };
