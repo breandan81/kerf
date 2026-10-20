@@ -282,6 +282,37 @@ test('flex: max_len splits long walls to fit small sheets', () => {
   // a round pot has no straight stretch: it still splits (seams in the bend)
   assert.equal(JSON.parse(run('use <flex.kerf>\necho(flex_lengths([for (a = [0:5:355]) 60 * [cos(a), sin(a)]], 3, max_len = 290));').echo[0].text).length, 2);
 });
+const flexGeom = await import('../js/geom/flex.js');
+test('flex: flat fingers on curves fit their plate slots and notches', () => {
+  // fingers have no hinge cuts, so on a curve each one is a flat t-thick
+  // rectangle on the chord between its ends; it must not hit the plate
+  const shapes = [
+    flexGeom.roundCorners([[0, 0], [120, 0], [120, 80], [0, 80]], 20, () => 360).path,
+    flexGeom.roundCorners([[0, 0], [120, 0], [120, 80], [0, 80]], 8, () => 360).path,
+    Array.from({ length: 72 }, (_, i) => [60 * Math.cos(i * Math.PI / 36), 60 * Math.sin(i * Math.PI / 36)]),
+  ];
+  for (const path of shapes) for (const lip of [0, 4]) {
+    const lay = flexGeom.flexLayout(path, 3, {});
+    const plate = flexGeom.flexPlate(lay, lip);
+    const { C, s, n, t } = lay;
+    const at = u => {
+      let k = 0;
+      while (k < n - 1 && s[k + 1] <= u) k++;
+      const a = C[k], b = C[(k + 1) % n], f = (u - s[k]) / (s[k + 1] - s[k]);
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+    };
+    let tabs = 0;
+    for (const pc of lay.pieces) for (const [a, b] of pc.fingers) {
+      const A = at(pc.s0 + a - pc.lead), B = at(pc.s0 + b - pc.lead);
+      const L = Math.hypot(B[0] - A[0], B[1] - A[1]), N = [(B[1] - A[1]) / L * t / 2, -(B[0] - A[0]) / L * t / 2];
+      const rect = [[A[0] + N[0], A[1] + N[1]], [B[0] + N[0], B[1] + N[1]], [B[0] - N[0], B[1] - N[1]], [A[0] - N[0], A[1] - N[1]]];
+      const hit = clip.intersection([rect], plate).reduce((sum, q) => sum + Math.abs(clip.area(q)), 0);
+      assert(hit < 0.001, `lip ${lip}: a flat finger overlaps the plate by ${hit.toFixed(4)} mm²`);
+      tabs++;
+    }
+    assert(tabs > 10);
+  }
+});
 test('include of a missing file is reported, not fatal', () => {
   const r = run('include <nope.kerf>\nsquare(5);');
   assert.equal(r.parts.length, 1);

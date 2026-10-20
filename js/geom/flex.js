@@ -331,10 +331,20 @@ function stripRects(lay, ua, ub, din, dout) {
   return out;
 }
 
+// The rectangle a flat finger really covers: fingers have no hinge cuts, so on
+// a curve they stay straight, along the chord between the centreline points
+// at their ends (standing off the curve by at most lay.sag in the middle).
+function chordRect(lay, ua, ub, din, dout) {
+  const A = frameAt(lay, ua, false).p, B = frameAt(lay, ub, true).p;
+  const N = right(unit(sub(B, A)));
+  return [add(A, mul(N, dout)), add(B, mul(N, dout)), sub(B, mul(N, din)), sub(A, mul(N, din))];
+}
+
 // ------------------------------------------------------------ plate
 
 // The bottom/top plate: the outline (grown by `lip` for tabs-through-slots)
-// minus a notch or slot wherever a panel finger comes through.
+// minus a notch or slot wherever a panel finger comes through. On curves
+// the slot covers both the curved wall and the finger's flat chord.
 export function flexPlate(lay, lip = 0) {
   const t = lay.t;
   const outline = lip > 0 ? clip.offset([lay.P], lip, 'round') : clip.union([lay.P]);
@@ -342,7 +352,8 @@ export function flexPlate(lay, lip = 0) {
   for (const pc of lay.pieces) {
     for (const [a, b] of pc.fingers) {
       const ua = pc.s0 + a - pc.lead, ub = pc.s0 + b - pc.lead, dout = lip > 0 ? t / 2 : t / 2 + 1;
-      holes.push(band(lay, ua, ub, t / 2, dout), ...stripRects(lay, ua, ub, t / 2, dout));
+      // the curve, the 3D view's strips and the flat finger: whichever way it sits, it fits
+      holes.push(band(lay, ua, ub, t / 2, dout), chordRect(lay, ua, ub, t / 2, dout), ...stripRects(lay, ua, ub, t / 2, dout));
     }
   }
   return clip.difference(outline, holes);
