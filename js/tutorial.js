@@ -92,11 +92,16 @@ coaster and the fit check would complain.</p>`,
 <p><code>text()</code> uses any font installed on your computer, written as <code>"Family:style=Style"</code>.
 <code>image("file.png", width = …)</code> engraves a photo or bitmap, and <code>import("file.svg")</code> brings in
 vector artwork, which you can cut, engrave or score like any other shape.</p>
+<p><b>Your own pictures:</b> click <b>Add image…</b> in the toolbar (or paste a picture with Ctrl+V, or drop a file on
+the page). Kerf adds the file to the project and writes the code to use it at the cursor: inside a part's
+<code>{ }</code> just the <code>engrave()</code> line, anywhere else a whole new part with an outline to cut.
+In xTool, choose the picture's bitmap settings (dithering, power, speed); Kerf exports it as it is.</p>
 <p>Engraving is clipped to its part, so it never spills off the edge.</p>`,
     tasks: [
       'Change the text, then try <code>font = "DejaVu Serif:style=Italic"</code>.',
       'Wrap the score line in <code>engrave()</code> instead and compare.',
       'Cut the star out instead of engraving it: move the <code>import</code> line into a <code>difference()</code>.',
+      'Put the cursor on an empty line at the end of the file, click <b>Add image…</b> and pick a photo from your computer.',
     ],
   },
   {

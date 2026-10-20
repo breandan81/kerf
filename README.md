@@ -139,6 +139,9 @@ you drew.
 The website at https://kerf.bposhaughnessy.com works like a desktop program.
 - **Open… (Ctrl+O)** loads a `.kerf` file. Select its images, SVGs and fonts in the same dialog, or drag them onto
   the page.
+- **Add image…** (or paste a picture with Ctrl+V, or drop one on the page) adds an image, SVG or font to the project
+  and writes the code to use it at the cursor. If a design asks for a file the project doesn't have, the console
+  says so with a button to choose it.
 - **Save (Ctrl+S)** writes the file back in place in Chrome/Edge, or downloads it in Firefox. In Firefox, turn on
   *Settings → Downloads → Always ask you where to save files* to get a save dialog.
 - Unsaved work survives a closed tab as a draft.

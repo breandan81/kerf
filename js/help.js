@@ -21,7 +21,7 @@ Units are mm. <b>F5</b> render · <b>Ctrl+S</b> save · <b>Ctrl+/</b> comment ·
 <tr><td>score() { … }</td><td>Line-engrave the outlines of the children (no cut).</td></tr>
 <tr><td>cut() { … }</td><td>Cut the outlines as lines without them becoming holes.</td></tr>
 <tr><td>line([[x,y], …], closed=false)</td><td>Open polyline, cut by default (wrap in score() to score it).</td></tr>
-<tr><td>image("photo.png", width=50, dpi=300, center=false)</td><td>Bitmap engraving (path relative to the .kerf file).</td></tr>
+<tr><td>image("photo.png", width=50, dpi=300, center=false)</td><td>Bitmap engraving (path relative to the .kerf file). Put it inside a part, in <code>engrave()</code>. To bring a picture in, click <b>Add image…</b>, paste it (Ctrl+V) or drop it on the page: Kerf adds the file and writes the code at the cursor. In xTool, give the picture its bitmap settings (dithering, power, speed).</td></tr>
 </table>
 
 <h3>2D shapes</h3>

@@ -42,6 +42,13 @@ CodeMirror.defineSimpleMode('kerf', {
   meta: { lineComment: '//', blockCommentStart: '/*', blockCommentEnd: '*/', electricChars: '}' },
 });
 
+// images, SVGs and fonts a design can use
+const ASSET_RE = /\.(png|jpe?g|gif|webp|bmp|svg|ttf|otf)$/i;
+const ASSET_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.ttf,.otf';
+// console notes that survive re-renders until dealt with: { kind, text, action, file }
+const notes = [];
+const dropNote = n => { const i = notes.indexOf(n); if (i >= 0) notes.splice(i, 1); };
+
 const editor = CodeMirror($('editor'), {
   mode: 'kerf', lineNumbers: true, indentUnit: 2, tabSize: 2, matchBrackets: true,
   autoCloseBrackets: true, styleActiveLine: true,
@@ -259,7 +266,14 @@ async function render({ manual = false } = {}) {
   if (seq !== renderSeq) return;
   clearMarks();
   $('console').innerHTML = '';
-  for (const [k, msg] of res.failed) if (src.includes(k.split(':').slice(1).join(':').split('/').pop())) log('err', msg);
+  for (const n of notes) if (!n.file || src.includes(n.file)) log(n.kind, n.text, null, n.action);
+  for (const [k, msg] of res.failed) {
+    const path = k.split(':').slice(1).join(':'), name = path.split('/').pop();
+    if (!src.includes(name)) continue;
+    if (ASSET_RE.test(name) && !/^font:[^/]*:style=/.test(k)) {
+      log('err', `"${name}" isn't in this project yet.`, null, { label: `Choose ${name}…`, run: () => supplyMissing(path) });
+    } else log('err', msg);
+  }
   for (const [name, msg] of res.notes) if (src.includes(name)) log('warn', 'FONT: ' + msg);
   if (error) {
     const where = error.line ? `${error.file && error.file !== current ? error.file + ', ' : ''}line ${error.line}` : '';
@@ -310,7 +324,7 @@ function checkFit() {
   }
 }
 
-function log(kind, text, line) {
+function log(kind, text, line, action) {
   const d = document.createElement('div');
   d.className = kind;
   if (line) {
@@ -319,6 +333,13 @@ function log(kind, text, line) {
     a.addEventListener('click', () => { editor.setCursor(line - 1, 0); editor.focus(); });
     d.appendChild(a);
   } else d.textContent = text;
+  if (action) {
+    const b = document.createElement('button');
+    b.className = 'logaction';
+    b.textContent = action.label;
+    b.addEventListener('click', action.run);
+    d.append(' ', b);
+  }
   $('console').appendChild(d);
 }
 
@@ -494,11 +515,137 @@ async function addFiles(fileList, handles = []) {
   const assets = names.filter(n => !kerfs.includes(n));
   if (assets.length) log('ok', `Loaded ${assets.join(', ')}`);
   if (kerfs.length) {
-    if (isDirty() && !confirm(`Discard unsaved changes to ${current}?`)) return;
+    if (isDirty() && !confirm(`Discard unsaved changes to ${current}?`)) return assets;
     savedText = editor.getValue();
     await openFile(kerfs[0]);
   } else render({ manual: true });
+  return assets;
 }
+
+// ------------------------------------------------------------------ images, SVGs, fonts
+// Add image… / paste / drop: the file joins the project (next to the .kerf
+// file) and the code to use it goes in at the cursor.
+
+function pickFiles(accept, multiple) {
+  return new Promise(resolve => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = accept;
+    inp.multiple = multiple;
+    inp.addEventListener('change', () => resolve([...inp.files]));
+    inp.addEventListener('cancel', () => resolve([]));
+    inp.click();
+  });
+}
+
+// is the cursor inside { } (e.g. a part's body)? Comments and strings ignored
+function cursorInBlock() {
+  const text = editor.getRange({ line: 0, ch: 0 }, editor.getCursor())
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  let depth = 0;
+  for (const c of text) { if (c === '{') depth++; else if (c === '}') depth = Math.max(0, depth - 1); }
+  return depth > 0;
+}
+
+async function imageAspect(file) {
+  try { const b = await createImageBitmap(file); const r = b.height / b.width; b.close(); return r; } catch { return 1; }
+}
+
+async function snippetFor(file, name) {
+  const r1 = n => Math.round(n * 10) / 10;
+  if (/\.(ttf|otf)$/i.test(name)) return `text("Hello", size = 10, font = "${name}");`;
+  const isSvg = /\.svg$/i.test(name);
+  const use = isSvg ? `import("${name}", center = true)` : `image("${name}", width = 50, center = true)`;
+  const sized = isSvg ? `resize([50, 0], auto = true) ${use}` : use;
+  if (cursorInBlock()) return `engrave() ${sized};`;
+  // at the top level: a whole part, an outline with the picture engraved on it
+  const h = isSvg ? 50 : r1(50 * await imageAspect(file));
+  const stem = name.replace(/\.[^.]+$/, '').replace(/\W+/g, '_');
+  return `part("${stem}") {\n  rounded_square([60, ${r1(h + 10)}], r = 3);   // the outline that gets cut\n` +
+    `  engrave() translate([30, ${r1((h + 10) / 2)}]) ${sized};\n}`;
+}
+
+async function insertAssets(files, assets) {
+  if (!assets.length) return;
+  const src = editor.getValue();
+  const snippets = [];
+  for (const name of assets) {
+    const rel = name.split('/').pop();
+    if (src.includes(`"${rel}"`)) continue;   // already used
+    snippets.push(await snippetFor(files.find(f => f.name === rel), rel));
+  }
+  if (!snippets.length) return;
+  const cur = editor.getCursor();
+  const line = editor.getLine(cur.line);
+  const indent = /^\s*/.exec(line)[0];
+  const text = snippets.join('\n').split('\n').map(l => indent + l).join('\n');
+  if (line.trim()) editor.replaceRange('\n' + text, { line: cur.line, ch: line.length });
+  else editor.replaceRange(text, { line: cur.line, ch: 0 }, { line: cur.line, ch: line.length });
+  editor.focus();
+}
+
+async function addAssets(files) {
+  files = files.filter(f => ASSET_RE.test(f.name));
+  if (!files.length) return;
+  const assets = await addFiles(files);
+  await insertAssets(files, assets);
+  if (store_.kind === 'workspace' && !notes.some(n => n.workspace)) {
+    const n = { kind: 'note', workspace: true, text: 'The website keeps added files only while this tab is open. Next time, select them along with your .kerf file in Open… (or use Choose… when it asks).' };
+    n.action = { label: 'OK', run: () => { dropNote(n); render({ manual: true }); } };
+    notes.push(n);
+  }
+}
+
+// a file the code refers to but the project doesn't have: store the chosen
+// one under the name the code uses
+async function supplyMissing(path) {
+  const ext = path.split('.').pop().toLowerCase();
+  const [f] = await pickFiles(/^(png|jpe?g|gif|webp|bmp)$/.test(ext) ? 'image/*' : '.' + ext, false);
+  if (!f) return;
+  await store_.write(path, f);
+  res.refreshFiles();
+  log('ok', `Added ${f.name} as ${path}`);
+  render({ manual: true });
+}
+
+$('addimage').addEventListener('click', async () => addAssets(await pickFiles(ASSET_ACCEPT, true)));
+
+// paste an image (a screenshot, or a picture copied from a web page or app)
+editor.on('paste', (cm, e) => {
+  const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
+  if (!files.length) return;
+  e.preventDefault();
+  (async () => {
+    const have = new Set((await store_.list()).map(f => f.split('/').pop()));
+    const named = files.map(f => {
+      const ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg').replace('svg+xml', 'svg');
+      let i = 1;
+      while (have.has(`pasted-${i}.${ext}`)) i++;
+      have.add(`pasted-${i}.${ext}`);
+      return new File([f], `pasted-${i}.${ext}`, { type: f.type });
+    });
+    await addAssets(named);
+    // a pasted picture exists nowhere else: offer to keep it
+    if (store_.kind !== 'workspace') return;   // saved in the folder already
+    for (const f of named) {
+      const n = { kind: 'note', file: f.name, text: `${f.name} was pasted, so it isn't on your computer yet.` };
+      n.action = {
+        label: 'Download it',
+        run: () => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(f);
+          a.download = f.name;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+          dropNote(n);
+          render({ manual: true });
+        },
+      };
+      notes.push(n);
+    }
+    render({ manual: true });
+  })();
+});
 
 async function openFromDisk() {
   if (desktop) {
@@ -528,11 +675,15 @@ async function openPath(p) {
 $('open').addEventListener('click', openFromDisk);
 $('openinput').addEventListener('change', e => { if (e.target.files.length) addFiles([...e.target.files]); e.target.value = ''; });
 // drop files anywhere on the page
-window.addEventListener('dragover', e => { if (store_ && store_.kind !== 'server') e.preventDefault(); });
+window.addEventListener('dragover', e => { if (store_) e.preventDefault(); });
 window.addEventListener('drop', e => {
-  if (!store_ || store_.kind === 'server' || !e.dataTransfer.files.length) return;
+  if (!store_ || !e.dataTransfer.files.length) return;
   e.preventDefault();
-  addFiles([...e.dataTransfer.files]);
+  const files = [...e.dataTransfer.files];
+  // just images/SVGs/fonts: add them and the code to use them; with a .kerf, open it
+  // (local mode works in its project folder: only images/SVGs/fonts go in that way)
+  if (files.every(f => ASSET_RE.test(f.name))) addAssets(files);
+  else if (store_.kind !== 'server') addFiles(files);
 });
 
 // ------------------------------------------------------------------ help, keys, splitter
