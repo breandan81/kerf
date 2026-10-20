@@ -296,55 +296,27 @@ function frameAt(lay, u, atEnd) {
   return { p: add(a, mul(d, u - s[k])), nrm: right(d), k };
 }
 
-// outward miter direction at centreline vertex i, scaled so that offsetting
-// by it times d moves both neighbouring edges by d
-function miterOut(lay, i) {
-  const { C, n } = lay;
-  const n1 = right(unit(sub(C[i], C[(i - 1 + n) % n]))), n2 = right(unit(sub(C[(i + 1) % n], C[i])));
-  const b = unit(add(n1, n2));
-  return mul(b, 1 / dot(b, n1));
-}
-
-// Polygon covering the wall's thickness between centreline distances ua..ub:
-// din inward and dout outward of the centreline, ends cut square.
-function band(lay, ua, ub, din, dout) {
-  const A = frameAt(lay, ua, false), B = frameAt(lay, ub, true);
-  const mid = [];
-  for (let i = A.k + 1; i <= B.k; i++) mid.push({ p: lay.C[i], m: miterOut(lay, i) });
-  const pts = [{ p: A.p, m: A.nrm }, ...mid, { p: B.p, m: B.nrm }];
-  return [...pts.map(q => add(q.p, mul(q.m, dout))), ...pts.reverse().map(q => sub(q.p, mul(q.m, din)))];
-}
-
-// The same stretch as the rigid strips of the 3D view cover it: one
-// rectangle per centreline segment. Notches include these too, so the fit
-// check never reports a strip's square end poking past a mitred notch.
-function stripRects(lay, ua, ub, din, dout) {
-  const { C, s, n } = lay;
-  const out = [];
-  for (let k = 0; k < n; k++) {
-    const xa = Math.max(ua, s[k]), xb = Math.min(ub, s[k + 1]);
-    if (xb - xa <= 1e-9) continue;
-    const a = C[k], u = unit(sub(C[(k + 1) % n], a)), N = right(u);
-    const pa = add(a, mul(u, xa - s[k])), pb = add(a, mul(u, xb - s[k]));
-    out.push([add(pa, mul(N, dout)), add(pb, mul(N, dout)), sub(pb, mul(N, din)), sub(pa, mul(N, din))]);
-  }
-  return out;
-}
-
-// The rectangle a flat finger really covers: fingers have no hinge cuts, so on
-// a curve they stay straight, along the chord between the centreline points
-// at their ends (standing off the curve by at most lay.sag in the middle).
-function chordRect(lay, ua, ub, din, dout) {
+// Where a flat finger really sits: fingers have no hinge cuts, so on a curve
+// they stay straight, along the chord between the centreline points at their
+// ends (standing off the curve by at most lay.sag in the middle). The finger
+// keeps its flat length, a hair more than the chord, centred on it.
+// Returns the frame: o = where the finger's middle sits, u along, N outward.
+function chordFrame(lay, ua, ub) {
   const A = frameAt(lay, ua, false).p, B = frameAt(lay, ub, true).p;
-  const N = right(unit(sub(B, A)));
+  const u = unit(sub(B, A));
+  return { o: mul(add(A, B), 0.5), u, N: right(u), half: (ub - ua) / 2 };
+}
+function chordRect(lay, ua, ub, din, dout) {
+  const { o, u, N, half } = chordFrame(lay, ua, ub);
+  const A = sub(o, mul(u, half)), B = add(o, mul(u, half));
   return [add(A, mul(N, dout)), add(B, mul(N, dout)), sub(B, mul(N, din)), sub(A, mul(N, din))];
 }
 
 // ------------------------------------------------------------ plate
 
 // The bottom/top plate: the outline (grown by `lip` for tabs-through-slots)
-// minus a notch or slot wherever a panel finger comes through. On curves
-// the slot covers both the curved wall and the finger's flat chord.
+// minus a notch or slot wherever a panel finger comes through: a straight
+// rectangle, since fingers stay flat even on curves.
 export function flexPlate(lay, lip = 0) {
   const t = lay.t;
   const outline = lip > 0 ? clip.offset([lay.P], lip, 'round') : clip.union([lay.P]);
@@ -352,8 +324,7 @@ export function flexPlate(lay, lip = 0) {
   for (const pc of lay.pieces) {
     for (const [a, b] of pc.fingers) {
       const ua = pc.s0 + a - pc.lead, ub = pc.s0 + b - pc.lead, dout = lip > 0 ? t / 2 : t / 2 + 1;
-      // the curve, the 3D view's strips and the flat finger: whichever way it sits, it fits
-      holes.push(band(lay, ua, ub, t / 2, dout), chordRect(lay, ua, ub, t / 2, dout), ...stripRects(lay, ua, ub, t / 2, dout));
+      holes.push(chordRect(lay, ua, ub, t / 2, dout));
     }
   }
   return clip.difference(outline, holes);
@@ -416,6 +387,21 @@ export function flexStrips(lay, index, shape) {
   for (let k = 0; k < n; k++) if (s[k] < pc.s0 + pc.len - 1e-9 && s[k + 1] > pc.s0 + 1e-9) groups.push({ start: k, end: k + 1 });
   const BIG = 1e5;
   const out = [];
+  // fingers have no hinge cuts, so they stay flat: each is its own rigid
+  // piece along the chord between its ends, the same rectangle the plates cut
+  const top = clip.bounds(shape.body).y1;
+  const fingerBoxes = pc.fingers.flatMap(([a, b]) => [
+    [[a, -BIG], [b, -BIG], [b, t], [a, t]], [[a, top - t], [b, top - t], [b, BIG], [a, BIG]]]);
+  for (const [a, b] of pc.fingers) {
+    const box = [[a, -BIG], [b, -BIG], [b, BIG], [a, BIG]];
+    const body = clip.intersection(shape.body, clip.intersection([box], fingerBoxes));
+    if (!body.length) continue;
+    const { o, u, N } = chordFrame(lay, pc.s0 + a - pc.lead, pc.s0 + b - pc.lead);
+    const m = (a + b) / 2;  // the finger's middle lands on the chord's
+    const tx = o[0] - u[0] * m - N[0] * t / 2, ty = o[1] - u[1] * m - N[1] * t / 2;
+    out.push({ shape: { body, lines: [], engrave: [], score: [], images: [] }, m4: [u[0], 0, N[0], tx, u[1], 0, N[1], ty, 0, 1, 0, 0, 0, 0, 0, 1] });
+  }
+  const rest = { ...shape, body: clip.difference(shape.body, fingerBoxes) };
   groups.forEach((g, gi) => {
     const a = C[g.start], b = C[g.end % n];
     const u = unit(sub(b, a)), N = right(u);
@@ -423,7 +409,7 @@ export function flexStrips(lay, index, shape) {
     const lo = gi === 0 ? -BIG : xa, hi = gi === groups.length - 1 ? BIG : xb;
     const box = [[[lo, -BIG], [hi, -BIG], [hi, BIG], [lo, BIG]]];
     const piece = {
-      body: clip.intersection(shape.body, box),
+      body: clip.intersection(rest.body, box),
       lines: clip.clipLines(shape.lines || [], box, true),
       engrave: clip.intersection(shape.engrave || [], box),
       score: clip.clipLines(shape.score || [], box, true),
