@@ -214,7 +214,12 @@ export async function build() {
 
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kerf reference</title>
+<title>Kerf reference: every module and argument</title>
+<meta name="description" content="Reference for Kerf, the code CAD for laser cutting: every built-in and library module (boxes, hinges, gears, curved flex boxes) with its arguments, defaults and examples.">
+<link rel="canonical" href="https://kerf.bposhaughnessy.com/docs/reference.html">
+<meta property="og:title" content="Kerf reference"><meta property="og:type" content="article">
+<meta property="og:url" content="https://kerf.bposhaughnessy.com/docs/reference.html">
+<meta property="og:image" content="https://kerf.bposhaughnessy.com/og.jpg"><meta name="twitter:card" content="summary_large_image">
 <style>
 :root { --bg: #fbfaf7; --fg: #222; --muted: #6b6560; --line: #e2ddd5; --code: #f1ede6; --accent: #c0392b; }
 @media (prefers-color-scheme: dark) { :root { --bg: #1c1b1a; --fg: #e8e4de; --muted: #a29a90; --line: #3a3733; --code: #2a2826; --accent: #ff7b6b; } }

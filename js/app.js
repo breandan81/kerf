@@ -11,6 +11,7 @@ import { bounds } from './geom/clip.js';
 import { HELP } from './help.js';
 import { LESSONS } from './tutorial.js';
 import { detectStore, seedExamples, FolderStore, canPickFolder, canSaveInPlace, legacyBrowserFiles, meta } from './storage.js';
+const BASE_TITLE = document.title;   // 'Kerf · code CAD for laser cutting' (what search results show)
 
 const desktop = !!window.kerfDesktop; // running inside the Electron app
 
@@ -201,7 +202,7 @@ async function saveToDisk(path, text, as) {
 }
 
 const isDirty = () => current && editor.getValue() !== savedText;
-function updateDirty() { $('dirty').hidden = !isDirty(); document.title = (isDirty() ? '● ' : '') + (current || '') + ' — Kerf'; }
+function updateDirty() { $('dirty').hidden = !isDirty(); document.title = (isDirty() ? '● ' : '') + (current ? current + ' — ' : '') + BASE_TITLE; }
 
 $('file').addEventListener('change', e => openFile(e.target.value));
 $('save').addEventListener('click', () => save());
